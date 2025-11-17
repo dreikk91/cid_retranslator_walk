@@ -1,0 +1,23 @@
+server:
+    host: 0.0.0.0
+    port: "20005"
+client:
+    host: 10.32.1.110
+    port: "20003"
+    reconnectinitial: 1s
+    reconnectmax: 1m0s
+queue:
+    buffersize: 100
+logging:
+    filename: app.log
+    maxsize: 10
+    maxbackups: 5
+    maxage: 28
+    compress: true
+cidrules:
+    requiredprefix: "5"
+    validlength: 20
+    testcodemap:
+        E603: E602
+    accnumoffset: 2100
+    accnumadd: 2100
