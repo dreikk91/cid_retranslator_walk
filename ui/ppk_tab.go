@@ -31,14 +31,18 @@ func CreatePPKTab(ppkModel *models.PPKModel, ppkTableView **walk.TableView, mw *
 					}
 				},
 				StyleCell: func(style *walk.CellStyle) {
-					items := ppkModel.GetItems()
-					if style.Row() >= len(items) {
+					row := style.Row()
+
+					// Використовуємо GetItemUnsafe замість GetItems
+					item := ppkModel.GetItemUnsafe(row)
+					if item == nil {
 						return
 					}
-					if style.Row()%2 == 0 {
+
+					if row%2 == 0 {
 						style.BackgroundColor = constants.ColorGray
 					}
-					item := items[style.Row()]
+
 					if style.Col() == 2 {
 						switch item.Status {
 						case "Помилка":

@@ -1,13 +1,13 @@
 package models
 
 import (
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/lxn/walk"
 )
 
-// EventItem - модель для таблиці Подій
 type EventItem struct {
 	Time     string
 	Device   string
@@ -15,23 +15,24 @@ type EventItem struct {
 	Type     string
 	Desc     string
 	Zone     string
-	Priority int // 0-критична, 1-помилка, 2-попередження, 3-інформація, 4-успіх
+	Priority int
 }
 
 type EventModel struct {
 	walk.TableModelBase
-	items     []*EventItem
-	tableView *walk.TableView
+	walk.SorterBase
+	items      []*EventItem
+	tableView  *walk.TableView
+	sortColumn int
+	sortOrder  walk.SortOrder
 }
 
 func NewEventModel() *EventModel {
-	return &EventModel{
-		//items: []*EventItem{
-		//	{"10:30:15", "Інформація", "Система запущена", 4},
-		//	{"10:28:42", "Попередження", "Низький рівень сигналу на ППК-005", 2},
-		//	{"10:25:10", "Помилка", "Втрата зв'язку з ППК-003", 1},
-		//},
+	m := &EventModel{
+		items:     make([]*EventItem, 0, 520), // preallocate
+		sortOrder: walk.SortDescending,        // За замовчуванням descending за часом
 	}
+	return m
 }
 
 func (m *EventModel) RowCount() int {
@@ -39,7 +40,7 @@ func (m *EventModel) RowCount() int {
 }
 
 func (m *EventModel) Value(row, col int) interface{} {
-	if row >= len(m.items) {
+	if row < 0 || row >= len(m.items) {
 		return nil
 	}
 	item := m.items[row]
@@ -60,20 +61,55 @@ func (m *EventModel) Value(row, col int) interface{} {
 	return nil
 }
 
+func (m *EventModel) Sort(col int, order walk.SortOrder) error {
+	m.sortColumn = col
+	m.sortOrder = order
+
+	sort.SliceStable(m.items, func(i, j int) bool {
+		a, b := m.items[i], m.items[j]
+		c := func(ls bool) bool {
+			if m.sortOrder == walk.SortAscending {
+				return ls
+			}
+			return !ls
+		}
+
+		switch col {
+		case 0: // Time (string comparison works for "2006-01-02 15:04:05")
+			return c(a.Time < b.Time)
+		case 1:
+			return c(a.Device < b.Device)
+		case 2:
+			return c(a.Code < b.Code)
+		case 3:
+			return c(a.Type < b.Type)
+		case 4:
+			return c(a.Desc < b.Desc)
+		case 5:
+			return c(a.Zone < b.Zone)
+		}
+		return false
+	})
+
+	return m.SorterBase.Sort(col, order)
+}
+
 func (m *EventModel) SetTableView(tv *walk.TableView) {
 	m.tableView = tv
 }
 
-func (m *EventModel) GetItems() []*EventItem {
-	return m.items
+func (m *EventModel) GetItem(row int) *EventItem {
+	if row < 0 || row >= len(m.items) {
+		return nil
+	}
+	return m.items[row]
 }
 
-// StartListening - запускає прослуховування каналу з батчингом
 func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
-	pendingEvents := make([]*EventItem, 0, 100)
+	pendingEvents := make([]*EventItem, 0, 200)
 	var mu sync.Mutex
 
-	// Горутина для читання з каналу
+	// Читання з каналу
 	go func() {
 		for event := range eventChan {
 			mu.Lock()
@@ -82,9 +118,9 @@ func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
 		}
 	}()
 
-	// Горутина для періодичного оновлення UI
+	// Батчинг оновлення UI
 	go func() {
-		ticker := time.NewTicker(1000 * time.Millisecond)
+		ticker := time.NewTicker(400 * time.Millisecond)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -93,25 +129,38 @@ func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
 				mu.Unlock()
 				continue
 			}
-
-			eventsToProcess := make([]*EventItem, len(pendingEvents))
-			copy(eventsToProcess, pendingEvents)
+			batch := make([]*EventItem, len(pendingEvents))
+			copy(batch, pendingEvents)
 			pendingEvents = pendingEvents[:0]
 			mu.Unlock()
 
-			if m.tableView != nil {
-				m.tableView.Synchronize(func() {
-					// Додаємо всі події одразу
-					for i := len(eventsToProcess) - 1; i >= 0; i-- {
-						m.items = append([]*EventItem{eventsToProcess[i]}, m.items...)
-					}
-					// Обмежуємо кількість подій до 500
-					if len(m.items) > 500 {
-						m.items = m.items[:500]
-					}
-					m.PublishRowsReset()
-				})
+			if m.tableView == nil {
+				continue
 			}
+
+			m.tableView.Synchronize(func() {
+				oldLen := len(m.items)
+				added := len(batch)
+
+				// Append в кінець (швидко, без зсуву)
+				m.items = append(m.items, batch...)
+
+				// Сповіщаємо про вставку в кінець
+				m.PublishRowsInserted(oldLen, added)
+
+				// Обрізаємо старі, якщо > 500 (видаляємо з початку)
+				if len(m.items) > 500 {
+					excess := len(m.items) - 500
+					m.items = m.items[excess:]
+					m.PublishRowsRemoved(0, excess)
+				}
+
+				// Сортуємо (новіші зверху) - це сповістить UI про зміни гладко
+				err := m.Sort(0, walk.SortDescending)
+				if err != nil {
+					panic(err)
+				}
+			})
 		}
 	}()
 }

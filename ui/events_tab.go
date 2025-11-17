@@ -19,19 +19,19 @@ func CreateEventsTab(eventModel *models.EventModel, eventTableView **walk.TableV
 				ColumnsOrderable: true,
 				Model:            eventModel,
 				Columns: []TableViewColumn{
-					{Title: "Час", Width: 150},
-					{Title: "ППК", Width: 80},
-					{Title: "Код", Width: 80},
-					{Title: "Тип", Width: 200},
-					{Title: "Опис", Width: 350},
+					{Title: "Час", Width: 120},
+					{Title: "ППК", Width: 50},
+					{Title: "Код", Width: 50},
+					{Title: "Тип", Width: 150},
+					{Title: "Опис", Width: 300},
 					{Title: "Зона|Група", Width: 120},
 				},
 				StyleCell: func(style *walk.CellStyle) {
-					items := eventModel.GetItems()
-					if style.Row() >= len(items) {
+					// Використовуємо безпечний метод getItem (всі зміни в UI thread)
+					item := eventModel.GetItem(style.Row())
+					if item == nil {
 						return
 					}
-					item := items[style.Row()]
 
 					switch item.Priority {
 					case constants.UnknownEvent:
@@ -52,11 +52,9 @@ func CreateEventsTab(eventModel *models.EventModel, eventTableView **walk.TableV
 					case constants.OtherEvent:
 						style.BackgroundColor = constants.OtherEventBG
 						style.TextColor = constants.OtherEventText
-
 					default:
 						style.BackgroundColor = constants.UnknownEventBG
 						style.TextColor = constants.UnknownEventText
-
 					}
 				},
 			},

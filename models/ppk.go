@@ -196,3 +196,10 @@ func (m *PPKModel) StartListening(dataChan <-chan *PPKItem) {
 		slog.Info("PPKModel updater goroutine stopped")
 	}()
 }
+
+func (m *PPKModel) GetItemUnsafe(row int) *PPKItem {
+	if row < 0 || row >= len(m.items) {
+		return nil
+	}
+	return m.items[row]
+}
