@@ -8,7 +8,12 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-func CreatePPKTab(ppkModel *models.PPKModel, ppkTableView **walk.TableView, mw **walk.MainWindow) TabPage {
+func CreatePPKTab(
+	ppkModel *models.PPKModel,
+	ppkTableView **walk.TableView,
+	mw **walk.MainWindow,
+	appCtx *AppContext, // Додаємо контекст
+) TabPage {
 	return TabPage{
 		Title:  "ППК",
 		Layout: VBox{},
@@ -25,21 +30,20 @@ func CreatePPKTab(ppkModel *models.PPKModel, ppkTableView **walk.TableView, mw *
 					{Title: "Дата/Час", Width: 200},
 				},
 				OnItemActivated: func() {
-					if (*ppkTableView).CurrentIndex() >= 0 && (*ppkTableView).CurrentIndex() < len(ppkModel.GetItems()) {
-						item := ppkModel.GetItems()[(*ppkTableView).CurrentIndex()]
-						ShowPPKDetails(*mw, item)
+					if (*ppkTableView).CurrentIndex() >= 0 {
+						item := ppkModel.GetItem((*ppkTableView).CurrentIndex())
+						if item != nil {
+							ShowPPKDetails(*mw, item, appCtx) // Передаємо контекст
+						}
 					}
 				},
 				StyleCell: func(style *walk.CellStyle) {
-					row := style.Row()
-
-					// Використовуємо GetItemUnsafe замість GetItems
-					item := ppkModel.GetItemUnsafe(row)
+					item := ppkModel.GetItem(style.Row())
 					if item == nil {
 						return
 					}
 
-					if row%2 == 0 {
+					if style.Row()%2 == 0 {
 						style.BackgroundColor = constants.ColorGray
 					}
 

@@ -1,5 +1,3 @@
-// models/ppk.go - VERSION WITH DETAILED LOGS
-
 package models
 
 import (
@@ -15,7 +13,7 @@ type PPKItem struct {
 	Number int
 	Name   string
 	Event  string
-	Date   string
+	Date   time.Time
 	Status string
 }
 
@@ -30,19 +28,9 @@ type PPKModel struct {
 
 func NewPPKModel() *PPKModel {
 	m := &PPKModel{
-		items: make([]*PPKItem, 0, 100),
+		items:     make([]*PPKItem, 0, 100),
+		sortOrder: walk.SortAscending, // За замовчуванням ascending за номером
 	}
-
-	//statuses := []string{"Активний", "Помилка", "Попередження"}
-	//for i := 1; i <= 100; i++ {
-	//	m.items = append(m.items, &PPKItem{
-	//		Number: i,
-	//		Name:   fmt.Sprintf("ППК-%03d", i),
-	//		Status: statuses[i%3],
-	//		Date:   time.Now().Format("2006-01-02 15:04:05"),
-	//	})
-	//}
-
 	slog.Info("PPKModel created", "initialItems", len(m.items))
 	return m
 }
@@ -64,7 +52,7 @@ func (m *PPKModel) Value(row, col int) interface{} {
 	case 2:
 		return item.Event
 	case 3:
-		return item.Date
+		return item.Date.Format("15:04:05 2006-01-02")
 	}
 	return nil
 }
@@ -90,7 +78,7 @@ func (m *PPKModel) Sort(col int, order walk.SortOrder) error {
 		case 2:
 			return c(a.Event < b.Event)
 		case 3:
-			return c(a.Date < b.Date)
+			return c(a.Date.Before(b.Date))
 		}
 		return false
 	})
@@ -107,6 +95,13 @@ func (m *PPKModel) GetItems() []*PPKItem {
 	return m.items
 }
 
+func (m *PPKModel) GetItem(row int) *PPKItem {
+	if row < 0 || row >= len(m.items) {
+		return nil
+	}
+	return m.items[row]
+}
+
 func (m *PPKModel) StartListening(dataChan <-chan *PPKItem) {
 	slog.Info("PPKModel.StartListening started")
 
@@ -119,18 +114,9 @@ func (m *PPKModel) StartListening(dataChan <-chan *PPKItem) {
 		itemCount := 0
 		for item := range dataChan {
 			itemCount++
-			slog.Debug("PPKModel received item",
-				"number", item.Number,
-				"name", item.Name,
-				"totalReceived", itemCount)
-
 			mu.Lock()
 			pendingItems = append(pendingItems, item)
-			pendingCount := len(pendingItems)
 			mu.Unlock()
-
-			slog.Debug("PPKModel item buffered",
-				"pendingCount", pendingCount)
 		}
 		slog.Info("PPKModel reader goroutine stopped")
 	}()
@@ -141,7 +127,6 @@ func (m *PPKModel) StartListening(dataChan <-chan *PPKItem) {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 
-		updateCount := 0
 		for range ticker.C {
 			mu.Lock()
 			if len(pendingItems) == 0 {
@@ -154,52 +139,55 @@ func (m *PPKModel) StartListening(dataChan <-chan *PPKItem) {
 			pendingItems = pendingItems[:0]
 			mu.Unlock()
 
-			updateCount++
-			slog.Info("PPKModel processing batch",
-				"batchSize", len(itemsToProcess),
-				"updateNumber", updateCount,
-				"tableView", m.tableView != nil)
-
 			if m.tableView == nil {
 				slog.Error("PPKModel.tableView is NIL! Cannot update UI")
 				continue
 			}
 
+			slog.Info("PPKModel processing batch",
+				"batchSize", len(itemsToProcess))
+
 			m.tableView.Synchronize(func() {
-				slog.Debug("PPKModel inside Synchronize",
-					"itemsToProcess", len(itemsToProcess))
+				updatedRows := make(map[int]bool)
+				addedRows := make([]*PPKItem, 0)
 
 				for _, item := range itemsToProcess {
 					found := false
 					for i, existing := range m.items {
 						if existing.Number == item.Number {
-							slog.Debug("PPKModel updating existing item",
-								"number", item.Number)
 							m.items[i] = item
+							updatedRows[i] = true
 							found = true
 							break
 						}
 					}
 					if !found {
-						slog.Debug("PPKModel adding new item",
-							"number", item.Number)
-						m.items = append(m.items, item)
+						addedRows = append(addedRows, item)
 					}
 				}
 
-				slog.Info("PPKModel calling PublishRowsReset",
-					"totalItems", len(m.items))
-				m.PublishRowsReset()
-				slog.Info("PPKModel PublishRowsReset completed")
+				// Повідомляємо про оновлені рядки
+				if len(updatedRows) > 0 {
+					// Walk не підтримує PublishRowsChanged для окремих рядків,
+					// тому викликаємо для всього діапазону
+					m.PublishRowsChanged(0, len(m.items)-1)
+				}
+
+				// Додаємо нові рядки в кінець
+				if len(addedRows) > 0 {
+					oldLen := len(m.items)
+					m.items = append(m.items, addedRows...)
+					m.PublishRowsInserted(oldLen, len(addedRows))
+
+					// Автоматично сортуємо після додавання
+					if err := m.Sort(m.sortColumn, m.sortOrder); err != nil {
+						slog.Error("Failed to sort PPK items", "error", err)
+					}
+				}
+
+				slog.Info("PPKModel update completed", "totalItems", len(m.items))
 			})
 		}
 		slog.Info("PPKModel updater goroutine stopped")
 	}()
-}
-
-func (m *PPKModel) GetItemUnsafe(row int) *PPKItem {
-	if row < 0 || row >= len(m.items) {
-		return nil
-	}
-	return m.items[row]
 }

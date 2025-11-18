@@ -1,6 +1,7 @@
 package models
 
 import (
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -9,7 +10,8 @@ import (
 )
 
 type EventItem struct {
-	Time     string
+	ID       int64
+	Time     time.Time
 	Device   string
 	Code     string
 	Type     string
@@ -46,7 +48,7 @@ func (m *EventModel) Value(row, col int) interface{} {
 	item := m.items[row]
 	switch col {
 	case 0:
-		return item.Time
+		return item.Time.Format("15:04:05 2006-01-02")
 	case 1:
 		return item.Device
 	case 2:
@@ -75,8 +77,8 @@ func (m *EventModel) Sort(col int, order walk.SortOrder) error {
 		}
 
 		switch col {
-		case 0: // Time (string comparison works for "2006-01-02 15:04:05")
-			return c(a.Time < b.Time)
+		case 0:
+			return a.Time.After(b.Time)
 		case 1:
 			return c(a.Device < b.Device)
 		case 2:
@@ -120,7 +122,7 @@ func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
 
 	// Батчинг оновлення UI
 	go func() {
-		ticker := time.NewTicker(400 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -151,15 +153,17 @@ func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
 				// Обрізаємо старі, якщо > 500 (видаляємо з початку)
 				if len(m.items) > 500 {
 					excess := len(m.items) - 500
-					m.items = m.items[excess:]
+					itemToDelete := 500 - excess
+					m.items = m.items[0:itemToDelete]
 					m.PublishRowsRemoved(0, excess)
 				}
 
 				// Сортуємо (новіші зверху) - це сповістить UI про зміни гладко
-				err := m.Sort(0, walk.SortDescending)
+				err := m.Sort(0, walk.SortAscending)
 				if err != nil {
-					panic(err)
+					slog.Debug("Event sort error", "err", err)
 				}
+
 			})
 		}
 	}()

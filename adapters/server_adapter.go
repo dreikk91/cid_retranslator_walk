@@ -55,7 +55,7 @@ func (ad Adapter) StreamEventsToUI(serverEventChan <-chan server.GlobalEvent, ui
 		if !found {
 			continue
 		}
-		priority, eventType := ad.determineEventPriority(code, eventType)
+		priority, eventType := ad.DetermineEventPriority(code, eventType)
 		uiEvent := &models.EventItem{
 			Time:     event.Time,
 			Device:   fmt.Sprint(event.DeviceID),
@@ -74,6 +74,108 @@ func (ad Adapter) StreamEventsToUI(serverEventChan <-chan server.GlobalEvent, ui
 		}
 	}
 	slog.Info("Event adapter stopped")
+}
+
+// StreamDeviceEventsToUI транслює події конкретного пристрою в UI
+// StreamDeviceEventsToUI транслює події конкретного пристрою в UI
+// LoadDeviceEvents завантажує початкові події для конкретного пристрою
+func (ad Adapter) LoadDeviceEvents(server *server.Server, deviceID int, uiDetailChan chan<- *models.DetailItem) {
+	slog.Info("Loading device events", "deviceID", deviceID)
+
+	events := server.GetDeviceEvents(deviceID)
+
+	for _, ev := range events {
+		if len(ev.Data) < 20 {
+			continue
+		}
+
+		devID := ev.Data[7:11]
+		code := ev.Data[11:15]
+		group := ev.Data[15:17]
+		zone := ev.Data[17:20]
+
+		eventType, desc, found := ad.EventMap.GetEventDescriptions(code)
+		if !found {
+			continue
+		}
+
+		priority, eventType := ad.DetermineEventPriority(code, eventType)
+
+		uiEvent := &models.DetailItem{
+			Time:     ev.Time,
+			Device:   fmt.Sprint(devID),
+			Code:     code,
+			Type:     eventType,
+			Desc:     desc,
+			Zone:     fmt.Sprintf("Зона %s|Група %s", zone, group),
+			Priority: priority,
+		}
+
+		select {
+		case uiDetailChan <- uiEvent:
+		default:
+			slog.Warn("UI detail event channel full, dropping item")
+		}
+	}
+
+	slog.Info("Device events loaded", "deviceID", deviceID, "count", len(events))
+}
+
+// StreamDeviceEventsToUI транслює події конкретного пристрою в UI
+func (ad Adapter) StreamDeviceEventsToUI(
+	deviceID int,
+	serverEventChan <-chan server.Event,
+	uiDetailChan chan<- *models.DetailItem,
+	stopChan <-chan struct{},
+) {
+	slog.Info("Device event stream started", "deviceID", deviceID)
+
+	for {
+		select {
+		case <-stopChan:
+			slog.Info("Device event stream stopped", "deviceID", deviceID)
+			return
+
+		case ev, ok := <-serverEventChan:
+			if !ok {
+				slog.Info("Device event channel closed", "deviceID", deviceID)
+				return
+			}
+
+			if len(ev.Data) < 20 {
+				slog.Warn("Event data too short", "deviceID", deviceID, "length", len(ev.Data))
+				continue
+			}
+
+			devID := ev.Data[7:11]
+			code := ev.Data[11:15]
+			group := ev.Data[15:17]
+			zone := ev.Data[17:20]
+
+			eventType, desc, found := ad.EventMap.GetEventDescriptions(code)
+			if !found {
+				continue
+			}
+
+			priority, eventType := ad.DetermineEventPriority(code, eventType)
+
+			uiEvent := &models.DetailItem{
+				Time:     ev.Time,
+				Device:   fmt.Sprint(devID),
+				Code:     code,
+				Type:     eventType,
+				Desc:     desc,
+				Zone:     fmt.Sprintf("Зона %s|Група %s", zone, group),
+				Priority: priority,
+			}
+
+			select {
+			case uiDetailChan <- uiEvent:
+			default:
+				slog.Warn("UI detail channel full, dropping event", "deviceID", deviceID)
+			}
+		}
+	}
 }
 
 // LoadInitialDevices завантажує початковий стан пристроїв в UI
@@ -102,7 +204,7 @@ func (ad Adapter) LoadInitialDevices(devices []server.Device, uiPPKChan chan<- *
 func (ad Adapter) LoadInitialEvents(events []server.GlobalEvent, uiEventChan chan<- *models.EventItem) {
 	slog.Info("Loading initial events", "count", len(events))
 	for _, event := range events {
-		priority, eventType := ad.determineEventPriority(event.Data, "success")
+		priority, eventType := ad.DetermineEventPriority(event.Data, "success")
 
 		uiEvent := &models.EventItem{
 			Time:     event.Time,
@@ -137,8 +239,8 @@ func (ad Adapter) determineDeviceStatus(lastEvent string) string {
 	return "Активний"
 }
 
-// determineEventPriority визначає пріоритет і тип події
-func (ad Adapter) determineEventPriority(code, event string) (int, string) {
+// DetermineEventPriority визначає пріоритет і тип події
+func (ad Adapter) DetermineEventPriority(code, event string) (int, string) {
 	// Приклад логіки визначення пріоритету
 	// Адаптуйте під ваш протокол CID
 

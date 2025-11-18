@@ -35,7 +35,7 @@ func GenerateEvents(eventChan chan<- *models.EventItem) {
 	for range ticker.C {
 		eventType := eventTypes[rand.Intn(len(eventTypes))]
 		event := &models.EventItem{
-			Time:     time.Now().Format("15:04:05"),
+			Time:     time.Now(),
 			Type:     eventType.Type,
 			Desc:     descriptions[rand.Intn(len(descriptions))],
 			Priority: eventType.Priority,

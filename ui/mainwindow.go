@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"cid_retranslator_walk/adapters"
+	"cid_retranslator_walk/core"
 	"cid_retranslator_walk/models"
 	"log/slog"
 
@@ -8,7 +10,13 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel) *walk.MainWindow {
+// AppContext тримає залежності для UI
+type AppContext struct {
+	Retranslator *core.App
+	Adapter      *adapters.Adapter
+}
+
+func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, appCtx *AppContext) *walk.MainWindow {
 	var mw *walk.MainWindow
 	var tabWidget *walk.TabWidget
 	var ppkTableView *walk.TableView
@@ -24,7 +32,7 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel) 
 			TabWidget{
 				AssignTo: &tabWidget,
 				Pages: []TabPage{
-					CreatePPKTab(ppkModel, &ppkTableView, &mw),
+					CreatePPKTab(ppkModel, &ppkTableView, &mw, appCtx),
 					CreateEventsTab(eventModel, &eventTableView),
 					CreateSettingsTab(),
 				},

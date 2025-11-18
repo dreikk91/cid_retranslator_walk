@@ -1,0 +1,8 @@
+*.exe
+*.log
+*.tmp
+*.gz
+*.zip
+*.tar
+*.xml
+*.iml

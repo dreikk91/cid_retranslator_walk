@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
-	"sort"
+	//"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -36,30 +36,31 @@ type Server struct {
 	lastActive       map[int]time.Time
 
 	// Постійні канали для UI
-	deviceUpdates chan Device
-	eventUpdates  chan GlobalEvent
-	closeOnce     sync.Once
+	deviceUpdates    chan Device
+	eventUpdates     chan GlobalEvent
+	deviceEventChans map[int]chan Event
+	closeOnce        sync.Once
 }
 
 // Event represents an event for a device
 type Event struct {
-	Time string `json:"time"`
-	Data string `json:"data"`
+	Time time.Time `json:"time"`
+	Data string    `json:"data"`
 }
 
 // Device represents a device with its events
 type Device struct {
-	ID            int     `json:"id"`
-	LastEventTime string  `json:"lastEventTime"`
-	LastEvent     string  `json:"lastEvent"`
-	Events        []Event `json:"events"`
+	ID            int       `json:"id"`
+	LastEventTime time.Time `json:"lastEventTime"`
+	LastEvent     string    `json:"lastEvent"`
+	Events        []Event   `json:"events"`
 }
 
 // GlobalEvent represents a global event across all devices
 type GlobalEvent struct {
-	Time     string `json:"time"`
-	DeviceID int    `json:"deviceID"`
-	Data     string `json:"data"`
+	Time     time.Time `json:"time"`
+	DeviceID int       `json:"deviceID"`
+	Data     string    `json:"data"`
 }
 
 // connection represents a client connection to the server.
@@ -83,8 +84,9 @@ func New(cfg *config.ServerConfig, q *queue.Queue, rules *config.CIDRules) *Serv
 		lastActive:       make(map[int]time.Time),
 
 		// Ініціалізуємо постійні канали з буфером
-		deviceUpdates: make(chan Device, 100),
-		eventUpdates:  make(chan GlobalEvent, 100),
+		deviceUpdates:    make(chan Device, 100),
+		eventUpdates:     make(chan GlobalEvent, 100),
+		deviceEventChans: make(map[int]chan Event),
 	}
 }
 
@@ -187,8 +189,7 @@ func (server *Server) cleanupInactiveDevices() {
 // UpdateDevice updates or adds an event for the device
 func (server *Server) UpdateDevice(id int, eventData string) {
 	now := time.Now()
-	nowStr := now.Format("15:04:05 2006-01-02")
-	event := Event{Time: nowStr, Data: eventData}
+	event := Event{Time: now, Data: eventData}
 
 	// Оновлюємо device
 	server.deviceMu.Lock()
@@ -196,13 +197,13 @@ func (server *Server) UpdateDevice(id int, eventData string) {
 	if !exists {
 		dev = &Device{
 			ID:            id,
-			LastEventTime: nowStr,
+			LastEventTime: now,
 			LastEvent:     eventData,
 			Events:        make([]Event, 0, 100),
 		}
 		server.devices[id] = dev
 	}
-	dev.LastEventTime = nowStr
+	dev.LastEventTime = now
 	dev.LastEvent = eventData
 	dev.Events = append(dev.Events, event)
 	if len(dev.Events) > 100 {
@@ -215,20 +216,17 @@ func (server *Server) UpdateDevice(id int, eventData string) {
 		ID:            dev.ID,
 		LastEventTime: dev.LastEventTime,
 		LastEvent:     dev.LastEvent,
-		Events:        nil, // Не копіюємо весь history для performance
+		Events:        nil,
 	}
 	server.deviceMu.Unlock()
 
 	// Оновлюємо global events
 	server.globalMu.Lock()
 	server.globalEventsRing = server.globalEventsRing.Next()
-	globalEvent := GlobalEvent{Time: nowStr, DeviceID: id, Data: eventData}
+	globalEvent := GlobalEvent{Time: now, DeviceID: id, Data: eventData}
 	server.globalEventsRing.Value = globalEvent
 	server.globalMu.Unlock()
-	slog.Info("📤 Sending to deviceUpdates channel",
-		"deviceID", id,
-		"channelCap", cap(server.deviceUpdates),
-		"channelLen", len(server.deviceUpdates))
+
 	// Non-blocking відправка в UI канали
 	select {
 	case server.deviceUpdates <- deviceCopy:
@@ -243,6 +241,17 @@ func (server *Server) UpdateDevice(id int, eventData string) {
 	default:
 		slog.Error("❌ Event channel FULL!", "deviceID", id)
 	}
+
+	// ВИПРАВЛЕНО: Відправка в device-specific канал
+	server.deviceMu.RLock() // Використовуємо RLock для читання map
+	if ch, ok := server.deviceEventChans[id]; ok {
+		select {
+		case ch <- event:
+		default:
+			// канал переповнений — пропускаємо
+		}
+	}
+	server.deviceMu.RUnlock()
 }
 
 // GetDeviceUpdatesChannel повертає read-only канал для оновлень пристроїв
@@ -284,7 +293,7 @@ func (server *Server) GetGlobalEvents() []GlobalEvent {
 	r := server.globalEventsRing
 	i := 0
 	for r != nil && i < server.maxGlobalEvents {
-		if val, ok := r.Value.(GlobalEvent); ok && val.Time != "" {
+		if val, ok := r.Value.(GlobalEvent); ok && !val.Time.IsZero() {
 			events = append(events, val)
 		}
 		r = r.Next()
@@ -300,11 +309,9 @@ func (server *Server) GetGlobalEvents() []GlobalEvent {
 	}
 
 	// Сортуємо за часом (новіші спочатку)
-	sort.Slice(events, func(p, q int) bool {
-		tp, _ := time.Parse("15:04:05 2006-01-02", events[p].Time)
-		tq, _ := time.Parse("15:04:05 2006-01-02", events[q].Time)
-		return tp.After(tq)
-	})
+	//sort.Slice(events, func(p, q int) bool {
+	//	return events[p].Time.After(events[q].Time)
+	//})
 
 	return events
 }
@@ -317,6 +324,34 @@ func (server *Server) GetDeviceEvents(id int) []Event {
 		return append([]Event{}, dev.Events...)
 	}
 	return []Event{}
+}
+
+// GetDeviceEventChannel повертає канал для подій конкретного пристрою
+func (server *Server) GetDeviceEventChannel(deviceID int) <-chan Event {
+	server.deviceMu.Lock()
+	defer server.deviceMu.Unlock()
+
+	// Створюємо канал якщо його ще немає
+	if server.deviceEventChans == nil {
+		server.deviceEventChans = make(map[int]chan Event)
+	}
+
+	if _, exists := server.deviceEventChans[deviceID]; !exists {
+		server.deviceEventChans[deviceID] = make(chan Event, 200)
+	}
+
+	return server.deviceEventChans[deviceID]
+}
+
+// CloseDeviceEventChannel закриває канал подій для пристрою (викликається при закритті діалогу)
+func (server *Server) CloseDeviceEventChannel(deviceID int) {
+	server.deviceMu.Lock()
+	defer server.deviceMu.Unlock()
+
+	if ch, exists := server.deviceEventChans[deviceID]; exists {
+		close(ch)
+		delete(server.deviceEventChans, deviceID)
+	}
 }
 
 func (c *connection) handleRequest(ctx context.Context) {

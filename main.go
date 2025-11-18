@@ -23,6 +23,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	// 1. Ініціалізація Core (TCP сервер/клієнт)
 	retranslator := core.NewApp()
 
@@ -47,12 +48,12 @@ func main() {
 	// 6. Чекаємо трохи, щоб TCP сервер встиг запуститись
 	time.Sleep(500 * time.Millisecond)
 	adapter := adapters.NewAdapter(eventMap)
+
 	// 7. Завантажуємо початковий стан (якщо є збережені дані)
 	go func() {
 		time.Sleep(1 * time.Second) // Чекаємо поки сервер повністю запуститься
 
 		initialDevices := retranslator.GetInitialDevices()
-
 		adapter.LoadInitialDevices(initialDevices, ppkChan)
 
 		initialEvents := retranslator.GetInitialEvents()
@@ -74,15 +75,21 @@ func main() {
 		adapter.StreamEventsToUI(eventUpdatesChan, eventChan)
 	}()
 
-	// 9. Створюємо і запускаємо UI (блокуюча операція)
-	slog.Info("Creating main window...")
-	mw := ui.CreateMainWindow(ppkModel, eventModel)
+	// 9. Створюємо контекст для передачі в UI
+	appContext := &ui.AppContext{
+		Retranslator: retranslator,
+		Adapter:      adapter,
+	}
 
-	// 10. Run блокує виконання до закриття вікна
+	// 10. Створюємо і запускаємо UI (блокуюча операція)
+	slog.Info("Creating main window...")
+	mw := ui.CreateMainWindow(ppkModel, eventModel, appContext) // Передаємо контекст
+
+	// 11. Run блокує виконання до закриття вікна
 	slog.Info("Starting UI...")
 	mw.Run()
 
-	// 11. Graceful shutdown після закриття UI
+	// 12. Graceful shutdown після закриття UI
 	slog.Info("UI closed, initiating shutdown...")
 	retranslator.Shutdown(retranslator.Ctx())
 

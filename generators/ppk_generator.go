@@ -21,7 +21,7 @@ func GeneratePPKData(ppkChan chan<- *models.PPKItem) {
 			Number: ppkNumber,
 			Name:   fmt.Sprintf("ППК-%03d", ppkNumber),
 			Status: statuses[rand.Intn(len(statuses))],
-			Date:   time.Now().Format("2006-01-02 15:04:05.000"),
+			Date:   time.Now(),
 		}
 		ppkChan <- item
 	}

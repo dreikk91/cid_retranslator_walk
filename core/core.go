@@ -238,6 +238,21 @@ func (a *App) GetInitialEvents() []server.GlobalEvent {
 	return a.tcpServer.GetGlobalEvents()
 }
 
+// GetDeviceEvents повертає події конкретного пристрою
+func (a *App) GetDeviceEvents(deviceID int) []server.Event {
+	return a.tcpServer.GetDeviceEvents(deviceID)
+}
+
+// GetDeviceEventChannel повертає канал для нових подій пристрою
+func (a *App) GetDeviceEventChannel(deviceID int) <-chan server.Event {
+	return a.tcpServer.GetDeviceEventChannel(deviceID)
+}
+
+// CloseDeviceEventChannel закриває канал подій пристрою
+func (a *App) CloseDeviceEventChannel(deviceID int) {
+	a.tcpServer.CloseDeviceEventChannel(deviceID)
+}
+
 func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
 }
