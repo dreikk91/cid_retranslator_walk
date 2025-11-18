@@ -21,6 +21,7 @@ type Client struct {
 	cancel           context.CancelFunc
 	stopOnce         sync.Once
 	startTime        time.Time
+	StatsCh          chan Stats
 }
 
 type Stats struct {
@@ -31,6 +32,11 @@ type Stats struct {
 	ConnectionStatus bool   `json:"connectionStatus"`
 }
 
+// Структура статистики вже є (Stats)
+type StatsPublisherConfig struct {
+    Interval time.Duration
+}
+
 func New(cfg *config.ClientConfig, q *queue.Queue) *Client {
 	return &Client{
 		host:             cfg.Host,
@@ -39,6 +45,8 @@ func New(cfg *config.ClientConfig, q *queue.Queue) *Client {
 		reconnectInitial: cfg.ReconnectInitial,
 		reconnectMax:     cfg.ReconnectMax,
 		startTime:        time.Now(),
+		StatsCh:          make(chan Stats, 2),
+
 	}
 }
 
@@ -69,6 +77,58 @@ func (c *Client) GetQueueStats() <-chan Stats {
 	}()
 
 	return ch
+}
+
+// StartStatsPublisher запускає горутину, яка періодично шле Stats у StatsCh.
+// Працює до скасування ctx.
+func (c *Client) StartStatsPublisher(ctx context.Context, interval time.Duration) {
+    // Ініціалізуємо канал при потребі (ненульовий, буферизований)
+    if c == nil {
+        return
+    }
+    if c.StatsCh == nil {
+        c.StatsCh = make(chan Stats, 2) // невеликий буфер
+    }
+
+    go func() {
+        ticker := time.NewTicker(interval)
+        defer ticker.Stop()
+        for {
+            select {
+            case <-ctx.Done():
+                // Закриваємо канал тільки якщо це бажано. Частіше — не закривати, caller закриє.
+                return
+            case <-ticker.C:
+                // Формуємо статистику без блокуючих операцій
+                accepted, rejected, reconnects, _ := c.queue.Stats()
+                uptime := time.Since(c.startTime).Truncate(time.Second)
+                status := c.queue.GetConnectionStatus()
+
+                s := Stats{
+                    Accepted:         accepted,
+                    Rejected:         rejected,
+                    Reconnects:       reconnects,
+                    Uptime:           formatDuration(uptime),
+                    ConnectionStatus: status,
+                }
+
+                // Невпевнений send? використаємо неблокуючий send з заміною останнього значення:
+                select {
+                case c.StatsCh <- s:
+                default:
+                    // якщо канал заповнений, викинути стару і поставити нову (drain+send)
+                    select {
+                    case <-c.StatsCh:
+                    default:
+                    }
+                    select {
+                    case c.StatsCh <- s:
+                    default:
+                    }
+                }
+            }
+        }
+    }()
 }
 
 func (c *Client) Run(ctx context.Context) {
@@ -133,6 +193,8 @@ func (c *Client) Stop() {
 			if c.conn != nil {
 				c.conn.Close()
 			}
+			close(c.StatsCh)
+			slog.Info("Client stopped.")
 		}
 	})
 }

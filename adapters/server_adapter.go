@@ -1,13 +1,15 @@
+// adapters/adapter.go (перейменував з server_adapter.go, бо тепер не тільки сервер; це простіше)
 package adapters
 
 import (
 	"cid_retranslator_walk/cidparser"
 	"cid_retranslator_walk/constants"
 	"cid_retranslator_walk/models"
-	"cid_retranslator_walk/server"
+	"cid_retranslator_walk/server"// Додаємо для Stats
 	"fmt"
 	"log/slog"
 	"strings"
+
 )
 
 type Adapter struct {
@@ -76,8 +78,6 @@ func (ad Adapter) StreamEventsToUI(serverEventChan <-chan server.GlobalEvent, ui
 	slog.Info("Event adapter stopped")
 }
 
-// StreamDeviceEventsToUI транслює події конкретного пристрою в UI
-// StreamDeviceEventsToUI транслює події конкретного пристрою в UI
 // LoadDeviceEvents завантажує початкові події для конкретного пристрою
 func (ad Adapter) LoadDeviceEvents(server *server.Server, deviceID int, uiDetailChan chan<- *models.DetailItem) {
 	slog.Info("Loading device events", "deviceID", deviceID)
@@ -182,12 +182,12 @@ func (ad Adapter) StreamDeviceEventsToUI(
 func (ad Adapter) LoadInitialDevices(devices []server.Device, uiPPKChan chan<- *models.PPKItem) {
 	slog.Info("Loading initial devices", "count", len(devices))
 	for _, device := range devices {
-		status := ad.determineDeviceStatus(device.LastEvent)
+		// status := ad.determineDeviceStatus(device.LastEvent)
 
 		uiItem := &models.PPKItem{
 			Number: device.ID,
-			Name:   fmt.Sprintf("ППК-%03d", device.ID),
-			Status: status,
+			Name:   fmt.Sprintf("%03d", device.ID),
+			Event: device.LastEvent,
 			Date:   device.LastEventTime,
 		}
 
@@ -203,13 +203,25 @@ func (ad Adapter) LoadInitialDevices(devices []server.Device, uiPPKChan chan<- *
 // LoadInitialEvents завантажує початковий стан подій в UI
 func (ad Adapter) LoadInitialEvents(events []server.GlobalEvent, uiEventChan chan<- *models.EventItem) {
 	slog.Info("Loading initial events", "count", len(events))
-	for _, event := range events {
-		priority, eventType := ad.DetermineEventPriority(event.Data, "success")
+	for _, ev := range events {
+		code := ev.Data[11:15]
+		group := ev.Data[15:17]
+		zone := ev.Data[17:20]
+
+		eventType, desc, found := ad.EventMap.GetEventDescriptions(code)
+		if !found {
+			continue
+		}
+
+		priority, eventType := ad.DetermineEventPriority(code, eventType)
 
 		uiEvent := &models.EventItem{
-			Time:     event.Time,
+			Time:     ev.Time,
+			Device:   fmt.Sprint(ev.DeviceID),
+			Code:     code,
 			Type:     eventType,
-			Desc:     formatEventDescription(event),
+			Desc:     desc,
+			Zone:     fmt.Sprintf("Зона %s|Група %s", zone, group),
 			Priority: priority,
 		}
 
@@ -277,3 +289,4 @@ func formatEventDescription(event server.GlobalEvent) string {
 	// Можете додати більше логіки форматування
 	return fmt.Sprintf("[ППК-%03d] %s", event.DeviceID, event.Data)
 }
+

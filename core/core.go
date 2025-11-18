@@ -38,6 +38,8 @@ type App struct {
 	logBuffer  []string
 	logMu      sync.RWMutex
 	startTime  time.Time
+	statsChan <-chan client.Stats
+	statsMu   sync.RWMutex
 }
 
 // NewApp creates a new App application struct
@@ -49,7 +51,6 @@ func NewApp() *App {
 	app := &App{
 		ctx:        ctx,
 		cfg:        cfg,
-		appQueue:   queue.New(cfg.Queue.BufferSize),
 		tcpServer:  server.New(&cfg.Server, sharedQueue, &cfg.CIDRules),
 		tcpClient:  client.New(&cfg.Client, sharedQueue),
 		cancelfunc: cancel,
@@ -217,6 +218,11 @@ func (a *App) Shutdown(ctx context.Context) {
 func (a *App) GetServer() *server.Server {
 	return a.tcpServer
 }
+
+func (a *App) GetClient() *client.Client {
+	return a.tcpClient
+}
+
 
 // GetDeviceUpdates повертає канал оновлень пристроїв
 func (a *App) GetDeviceUpdates() <-chan server.Device {

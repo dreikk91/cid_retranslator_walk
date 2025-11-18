@@ -16,11 +16,19 @@ type AppContext struct {
 	Adapter      *adapters.Adapter
 }
 
-func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, appCtx *AppContext) *walk.MainWindow {
+type MainWindowWithStats struct {
+	Window          *walk.MainWindow
+	StatsIndicators *StatsIndicators
+}
+
+func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, appCtx *AppContext, statsData *models.StatsData,) *MainWindowWithStats{
 	var mw *walk.MainWindow
 	var tabWidget *walk.TabWidget
 	var ppkTableView *walk.TableView
 	var eventTableView *walk.TableView
+
+	// Створюємо індикатори зі зв'язком з моделлю статистики
+	statsIndicators := NewStatsIndicators(statsData)
 
 	err := MainWindow{
 		AssignTo: &mw,
@@ -28,7 +36,7 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 		MinSize:  Size{Width: 600, Height: 400},
 		Layout:   VBox{},
 		Children: []Widget{
-			CreateIndicators(),
+			statsIndicators.CreateIndicators(),
 			TabWidget{
 				AssignTo: &tabWidget,
 				Pages: []TabPage{
@@ -52,5 +60,8 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 		"ppkTableView", ppkTableView != nil,
 		"eventTableView", eventTableView != nil)
 
-	return mw
+	return &MainWindowWithStats{
+		Window:          mw,
+		StatsIndicators: statsIndicators,
+	}
 }

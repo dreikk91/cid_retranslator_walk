@@ -60,3 +60,8 @@ const (
 	PriorityInfo     = 3
 	PrioritySuccess  = 4
 )
+
+var (
+	GreenBrush, _ = walk.NewSolidColorBrush(ColorGreen)
+	RedBrush, _   = walk.NewSolidColorBrush(ColorRed)
+)

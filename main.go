@@ -3,9 +3,11 @@ package main
 import (
 	"cid_retranslator_walk/adapters"
 	"cid_retranslator_walk/cidparser"
+	"cid_retranslator_walk/client"
 	"cid_retranslator_walk/core"
 	"cid_retranslator_walk/models"
 	"cid_retranslator_walk/ui"
+	"context"
 	"log"
 	"log/slog"
 	"os"
@@ -30,6 +32,7 @@ func main() {
 	// 2. Створюємо моделі UI
 	ppkModel := models.NewPPKModel()
 	eventModel := models.NewEventModel()
+	statsData := models.NewStatsData()
 
 	// 3. Створюємо канали UI з великими буферами для піків навантаження
 	ppkChan := make(chan *models.PPKItem, 100)
@@ -83,12 +86,18 @@ func main() {
 
 	// 10. Створюємо і запускаємо UI (блокуюча операція)
 	slog.Info("Creating main window...")
-	mw := ui.CreateMainWindow(ppkModel, eventModel, appContext) // Передаємо контекст
+	mw := ui.CreateMainWindow(ppkModel, eventModel, appContext, statsData) // Передаємо контекст
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go startStatsUpdater(ctx, retranslator.GetClient(), statsData, mw)
 
 	// 11. Run блокує виконання до закриття вікна
 	slog.Info("Starting UI...")
-	mw.Run()
+	mw.Window.Run()
 
+	
 	// 12. Graceful shutdown після закриття UI
 	slog.Info("UI closed, initiating shutdown...")
 	retranslator.Shutdown(retranslator.Ctx())
@@ -98,4 +107,48 @@ func main() {
 	close(eventChan)
 
 	slog.Info("Application shutdown complete")
+}
+
+
+func startStatsUpdater(
+	ctx context.Context,
+	tcpClient *client.Client,
+	statsData *models.StatsData,
+	mainWindow *ui.MainWindowWithStats,
+) {
+	slog.Info("Stats updater started")
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("Stats updater stopped")
+			return
+		case <-ticker.C:
+			// Отримуємо статистику з клієнта (неблокуюча операція через канал)
+			statsChan := tcpClient.GetQueueStats()
+			
+			select {
+			case stats := <-statsChan:
+				// Оновлюємо модель даних
+				statsData.Update(
+					stats.Accepted,
+					stats.Rejected,
+					stats.Reconnects,
+					stats.Uptime,
+					stats.ConnectionStatus,
+				)
+
+				// Оновлюємо UI в головному потоці Walk
+				mainWindow.Window.Synchronize(func() {
+					mainWindow.StatsIndicators.Update()
+				})
+
+			case <-time.After(500 * time.Millisecond):
+				// Якщо клієнт не відповідає за 500мс, логуємо попередження
+				slog.Warn("Stats channel timeout")
+			}
+		}
+	}
 }
