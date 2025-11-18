@@ -35,6 +35,7 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 		Title:    "Система моніторингу (модульна)",
 		MinSize:  Size{Width: 600, Height: 400},
 		Layout:   VBox{},
+		
 		Children: []Widget{
 			statsIndicators.CreateIndicators(),
 			TabWidget{

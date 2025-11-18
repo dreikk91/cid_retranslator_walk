@@ -7,7 +7,7 @@ var (
 	ColorGreen  = walk.RGB(76, 175, 80)   // Активний
 	ColorRed    = walk.RGB(244, 67, 54)   // Помилка
 	ColorOrange = walk.RGB(255, 152, 0)   // Попередження
-	ColorBlue   = walk.RGB(33, 150, 243)  // Інформація
+	ColorBlue   = walk.RGB(33, 150, 243)  // Інформаціяcolor.NRGBA
 	ColorWhite  = walk.RGB(255, 255, 255) // Білий текст
 	ColorBlack  = walk.RGB(0, 0, 0)       // Чорний текст
 	ColorGray   = walk.RGB(240, 240, 240) // Сірий фон
@@ -64,4 +64,25 @@ const (
 var (
 	GreenBrush, _ = walk.NewSolidColorBrush(ColorGreen)
 	RedBrush, _   = walk.NewSolidColorBrush(ColorRed)
+)
+
+
+var (
+	ModernBgPrimary   = walk.RGB( 248,  250,  252)
+	ModernBgCard      = walk.RGB( 255,  255,  255)
+	ModernBorder      = walk.RGB( 226,  232,  240)
+	StatAcceptedBg    = walk.RGB( 209,  250,  229)
+	StatAcceptedText  = walk.RGB( 22,  101,  52)
+	StatRejectedBg    = walk.RGB( 254,  226,  226)
+	StatRejectedText  = walk.RGB( 127,  29,  29)
+	StatReconnectBg   = walk.RGB( 254,  243,  199)
+	StatReconnectText = walk.RGB( 120,  53,  15)
+	StatUptimeBg      = walk.RGB( 219,  234,  254)
+	StatUptimeText    = walk.RGB( 30,  58,  138)
+	TabActive         = walk.RGB( 59,  130,  246)
+	TabInactive       = walk.RGB( 148,  163,  184)
+	TabActiveBg       = walk.RGB( 239,  246,  255)
+	TextPrimary       = walk.RGB( 15,  23,  42)
+	TextSecondary     = walk.RGB( 100,  116,  139)
+
 )

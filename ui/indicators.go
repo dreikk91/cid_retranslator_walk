@@ -61,14 +61,14 @@ func (si *StatsIndicators) createStatusIndicator() Composite {
 func (si *StatsIndicators) createAcceptedIndicator() Composite {
 	return Composite{
 		Layout:     HBox{},
-		Background: SolidColorBrush{Color: constants.ColorGreen},
+		Background: SolidColorBrush{Color: constants.StatAcceptedBg},
 		MinSize:    Size{Width: 120, Height: 30},
 		Children: []Widget{
 			HSpacer{},
 			Label{
 				AssignTo:  &si.AcceptedLabel,
 				Text:      "Прийнято: 0",
-				TextColor: constants.ColorWhite,
+				TextColor: constants.StatAcceptedText,
 				Font:      Font{PointSize: 9, Bold: true},
 			},
 			HSpacer{},
@@ -79,14 +79,14 @@ func (si *StatsIndicators) createAcceptedIndicator() Composite {
 func (si *StatsIndicators) createRejectedIndicator() Composite {
 	return Composite{
 		Layout:     HBox{},
-		Background: SolidColorBrush{Color: constants.ColorRed},
+		Background: SolidColorBrush{Color: constants.StatRejectedBg},
 		MinSize:    Size{Width: 120, Height: 30},
 		Children: []Widget{
 			HSpacer{},
 			Label{
 				AssignTo:  &si.RejectedLabel,
 				Text:      "Відхилено: 0",
-				TextColor: constants.ColorWhite,
+				TextColor: constants.StatRejectedText,
 				Font:      Font{PointSize: 9, Bold: true},
 			},
 			HSpacer{},
@@ -97,14 +97,14 @@ func (si *StatsIndicators) createRejectedIndicator() Composite {
 func (si *StatsIndicators) createReconnectsIndicator() Composite {
 	return Composite{
 		Layout:     HBox{},
-		Background: SolidColorBrush{Color: constants.ColorOrange},
+		Background: SolidColorBrush{Color: constants.StatReconnectBg},
 		MinSize:    Size{Width: 140, Height: 30},
 		Children: []Widget{
 			HSpacer{},
 			Label{
 				AssignTo:  &si.ReconnectsLabel,
 				Text:      "Переподключення: 0",
-				TextColor: constants.ColorWhite,
+				TextColor: constants.StatReconnectText,
 				Font:      Font{PointSize: 9, Bold: true},
 			},
 			HSpacer{},
@@ -115,14 +115,14 @@ func (si *StatsIndicators) createReconnectsIndicator() Composite {
 func (si *StatsIndicators) createUptimeIndicator() Composite {
 	return Composite{
 		Layout:     HBox{},
-		Background: SolidColorBrush{Color: constants.ColorBlue},
+		Background: SolidColorBrush{Color: constants.StatUptimeBg},
 		MinSize:    Size{Width: 140, Height: 30},
 		Children: []Widget{
 			HSpacer{},
 			Label{
 				AssignTo:  &si.UptimeLabel,
 				Text:      "Uptime: 00:00:00",
-				TextColor: constants.ColorWhite,
+				TextColor: constants.StatUptimeText,
 				Font:      Font{PointSize: 9, Bold: true},
 			},
 			HSpacer{},
@@ -137,10 +137,12 @@ func (si *StatsIndicators) Update() {
 	// Оновлюємо статус підключення
 	if status {
 		si.StatusLabel.SetText("Статус: Підключено")
-		si.StatusLabel.Parent().SetBackground(constants.GreenBrush)
+		green, _ := walk.NewSolidColorBrush(constants.ColorGreen)
+		si.StatusLabel.Parent().SetBackground(green)
 	} else {
 		si.StatusLabel.SetText("Статус: Відключено")
-		si.StatusLabel.Parent().SetBackground(constants.RedBrush)
+		red, _ := walk.NewSolidColorBrush(constants.ColorRed)
+		si.StatusLabel.Parent().SetBackground(red)
 	}
 
 	// Оновлюємо лічильники

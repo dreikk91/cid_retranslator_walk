@@ -108,7 +108,7 @@ func (m *EventModel) GetItem(row int) *EventItem {
 }
 
 func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
-	pendingEvents := make([]*EventItem, 0, 200)
+	pendingEvents := make([]*EventItem, 0, 400)
 	var mu sync.Mutex
 
 	// Читання з каналу
@@ -122,7 +122,7 @@ func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
 
 	// Батчинг оновлення UI
 	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(400 * time.Millisecond)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -153,6 +153,10 @@ func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
 				// Обрізаємо старі, якщо > 500 (видаляємо з початку)
 				if len(m.items) > 500 {
 					excess := len(m.items) - 500
+					if excess > 400 {
+						excess = 400
+					
+					}
 					itemToDelete := 500 - excess
 					m.items = m.items[0:itemToDelete]
 					m.PublishRowsRemoved(0, excess)
