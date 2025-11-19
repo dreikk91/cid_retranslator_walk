@@ -35,13 +35,12 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 	err := MainWindow{
 		AssignTo: &mw,
 		Title:    "CID Ретранслятор - Система моніторингу",
-		MinSize:  Size{Width: 800, Height: 600},
-		Size:     Size{Width: 1024, Height: 768},
-		Font:     Font{Family: "Segoe UI", PointSize: 10},
-		Layout:   VBox{Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}},
+		MinSize:  Size{Width: 900, Height: 650},
+		Size:     Size{Width: 1100, Height: 800},
+		Font:     Font{Family: "Segoe UI", PointSize: 9},
+		Layout:   VBox{MarginsZero: true, SpacingZero: true},
 
 		Children: []Widget{
-			statsIndicators.CreateIndicators(),
 			TabWidget{
 				AssignTo: &tabWidget,
 				Pages: []TabPage{
@@ -50,6 +49,7 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 					CreateSettingsTab(cfg),
 				},
 			},
+			statsIndicators.CreateIndicators(),
 		},
 	}.Create()
 
