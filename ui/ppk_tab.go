@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"cid_retranslator_walk/config"
 	"cid_retranslator_walk/constants"
 	"cid_retranslator_walk/models"
+	"time"
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -13,6 +15,7 @@ func CreatePPKTab(
 	ppkTableView **walk.TableView,
 	mw **walk.MainWindow,
 	appCtx *AppContext, // Додаємо контекст
+	cfg *config.Config, // Додаємо конфіг
 ) TabPage {
 	return TabPage{
 		Title:  "ППК",
@@ -48,6 +51,11 @@ func CreatePPKTab(
 						style.BackgroundColor = constants.ColorGray
 					}
 
+					// Перевірка на таймаут
+					if time.Since(item.Date) > cfg.Monitoring.PPKTimeout {
+						style.BackgroundColor = constants.ColorRed
+					}
+
 					if style.Col() == 2 {
 						switch item.Status {
 						case "Помилка":
@@ -62,4 +70,20 @@ func CreatePPKTab(
 			},
 		},
 	}
+}
+
+// StartPPKRefresh запускає періодичне оновлення таблиці ППК для відображення таймаутів
+func StartPPKRefresh(tv *walk.TableView) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			if tv != nil {
+				tv.Synchronize(func() {
+					tv.Invalidate()
+				})
+			}
+		}
+	}()
 }

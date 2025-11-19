@@ -39,6 +39,9 @@ type SettingsTab struct {
 	validLength    *walk.NumberEdit
 	accNumOffset   *walk.NumberEdit
 	accNumAdd      *walk.NumberEdit
+	
+	// Monitoring fields
+	ppkTimeout *walk.LineEdit
 }
 
 // NewSettingsTab creates a new settings tab with the given configuration
@@ -205,6 +208,20 @@ func (st *SettingsTab) CreateSettingsTab() TabPage {
 								},
 							},
 
+							// Monitoring Configuration
+							GroupBox{
+								Title:  "Моніторинг",
+								Layout: Grid{Columns: 2},
+								Children: []Widget{
+									Label{Text: "Таймаут подій ППК:"},
+									LineEdit{
+										AssignTo:    &st.ppkTimeout,
+										Text:        st.cfg.Monitoring.PPKTimeout.String(),
+										ToolTipText: "Формат: 15m, 1h тощо",
+									},
+								},
+							},
+
 							// Save and Reset buttons
 							Composite{
 								Layout: HBox{},
@@ -276,6 +293,16 @@ func (st *SettingsTab) saveSettings() {
 	st.cfg.CIDRules.AccNumOffset = int(st.accNumOffset.Value())
 	st.cfg.CIDRules.AccNumAdd = int(st.accNumAdd.Value())
 
+	// Update Monitoring config
+	if ppkTimeout, err := time.ParseDuration(st.ppkTimeout.Text()); err == nil {
+		st.cfg.Monitoring.PPKTimeout = ppkTimeout
+	} else {
+		walk.MsgBox(nil, "Помилка",
+			fmt.Sprintf("Невірний формат таймауту ППК: %v", err),
+			walk.MsgBoxIconError)
+		return
+	}
+
 	// Save to file
 	if err := st.cfg.Save("config.yaml"); err != nil {
 		walk.MsgBox(nil, "Помилка",
@@ -330,6 +357,8 @@ func (st *SettingsTab) resetSettings() {
 	st.validLength.SetValue(float64(st.cfg.CIDRules.ValidLength))
 	st.accNumOffset.SetValue(float64(st.cfg.CIDRules.AccNumOffset))
 	st.accNumAdd.SetValue(float64(st.cfg.CIDRules.AccNumAdd))
+
+	st.ppkTimeout.SetText(st.cfg.Monitoring.PPKTimeout.String())
 }
 
 // CreateSettingsTab is a helper function for backward compatibility

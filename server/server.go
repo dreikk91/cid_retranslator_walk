@@ -125,7 +125,7 @@ func (s *Server) Run(ctx context.Context) {
 	go s.acceptConnections(ctx)
 
 	// Горутина очищення неактивних пристроїв
-	go s.cleanupLoop(ctx)
+	// go s.cleanupLoop(ctx)
 
 	<-ctx.Done()
 	slog.Info("Server stopping...")

@@ -10,11 +10,12 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	Server   ServerConfig  `yaml:"server"`
-	Client   ClientConfig  `yaml:"client"`
-	Queue    QueueConfig   `yaml:"queue"`
-	Logging  LoggingConfig `yaml:"logging"`
-	CIDRules CIDRules      `yaml:"cidrules"`
+	Server     ServerConfig     `yaml:"server"`
+	Client     ClientConfig     `yaml:"client"`
+	Queue      QueueConfig      `yaml:"queue"`
+	Logging    LoggingConfig    `yaml:"logging"`
+	CIDRules   CIDRules         `yaml:"cidrules"`
+	Monitoring MonitoringConfig `yaml:"monitoring"`
 }
 
 // ServerConfig holds server-specific configuration.
@@ -55,6 +56,11 @@ type CIDRules struct {
 	AccNumAdd      int               `yaml:"accnumadd"`
 }
 
+// MonitoringConfig holds configuration for UI monitoring.
+type MonitoringConfig struct {
+	PPKTimeout time.Duration `yaml:"ppktimeout"`
+}
+
 // defaultConfig returns a new Config with default values.
 func defaultConfig() *Config {
 	return &Config{
@@ -85,6 +91,9 @@ func defaultConfig() *Config {
 			TestCodeMap:    map[string]string{"E603": "E602"},
 			AccNumOffset:   2100,
 			AccNumAdd:      2100,
+		},
+		Monitoring: MonitoringConfig{
+			PPKTimeout: 15 * time.Minute,
 		},
 	}
 }

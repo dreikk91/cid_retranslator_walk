@@ -45,7 +45,7 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 			TabWidget{
 				AssignTo: &tabWidget,
 				Pages: []TabPage{
-					CreatePPKTab(ppkModel, &ppkTableView, &mw, appCtx),
+					CreatePPKTab(ppkModel, &ppkTableView, &mw, appCtx, cfg),
 					CreateEventsTab(eventModel, &eventTableView),
 					CreateSettingsTab(cfg),
 				},
@@ -60,6 +60,9 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 	// КРИТИЧНО! Встановлюємо tableView ПІСЛЯ Create()
 	ppkModel.SetTableView(ppkTableView)
 	eventModel.SetTableView(eventTableView)
+
+	// Запускаємо автооновлення таблиці ППК для відображення таймаутів
+	StartPPKRefresh(ppkTableView)
 
 	slog.Info("MainWindow created",
 		"ppkTableView", ppkTableView != nil,
