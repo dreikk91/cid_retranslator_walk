@@ -19,15 +19,16 @@ func CreatePPKTab(
 		Layout: VBox{},
 		Children: []Widget{
 			TableView{
-				AssignTo:         ppkTableView,
-				AlternatingRowBG: true,
-				ColumnsOrderable: true,
-				Model:            ppkModel,
+				AssignTo:            ppkTableView,
+				AlternatingRowBG:    true,
+				ColumnsOrderable:    true,
+				LastColumnStretched: true,
+				Model:               ppkModel,
 				Columns: []TableViewColumn{
-					{Title: "№", Width: 50},
-					{Title: "ППК", Width: 50},
-					{Title: "Остання подія", Width: 250},
-					{Title: "Дата/Час", Width: 200},
+					{Title: "№", Width: 60},
+					{Title: "ППК", Width: 80},
+					{Title: "Остання подія", Width: 160}, // Ця колонка розтягується
+					{Title: "Дата/Час", Width: 160},
 				},
 				OnItemActivated: func() {
 					if (*ppkTableView).CurrentIndex() >= 0 {

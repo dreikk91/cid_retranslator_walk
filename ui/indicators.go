@@ -29,7 +29,7 @@ func NewStatsIndicators(statsData *models.StatsData) *StatsIndicators {
 // CreateIndicators створює композит з індикаторами
 func (si *StatsIndicators) CreateIndicators() Composite {
 	return Composite{
-		Layout: HBox{Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}, Spacing: 5},
+		Layout: HBox{Margins: Margins{Left: 5, Top: 5, Right: 5, Bottom: 5}, Spacing: 8},
 		Children: []Widget{
 			si.createStatusIndicator(),
 			si.createAcceptedIndicator(),
@@ -42,9 +42,9 @@ func (si *StatsIndicators) CreateIndicators() Composite {
 
 func (si *StatsIndicators) createStatusIndicator() Composite {
 	return Composite{
-		Layout:     HBox{},
+		Layout:     HBox{Margins: Margins{Left: 8, Top: 4, Right: 8, Bottom: 4}},
 		Background: SolidColorBrush{Color: constants.ColorGreen},
-		MinSize:    Size{Width: 140, Height: 30},
+		MinSize:    Size{Width: 150, Height: 25},
 		Children: []Widget{
 			HSpacer{},
 			Label{
@@ -60,9 +60,9 @@ func (si *StatsIndicators) createStatusIndicator() Composite {
 
 func (si *StatsIndicators) createAcceptedIndicator() Composite {
 	return Composite{
-		Layout:     HBox{},
+		Layout:     HBox{Margins: Margins{Left: 8, Top: 4, Right: 8, Bottom: 4}},
 		Background: SolidColorBrush{Color: constants.StatAcceptedBg},
-		MinSize:    Size{Width: 120, Height: 30},
+		MinSize:    Size{Width: 130, Height: 25},
 		Children: []Widget{
 			HSpacer{},
 			Label{
@@ -78,9 +78,9 @@ func (si *StatsIndicators) createAcceptedIndicator() Composite {
 
 func (si *StatsIndicators) createRejectedIndicator() Composite {
 	return Composite{
-		Layout:     HBox{},
+		Layout:     HBox{Margins: Margins{Left: 8, Top: 4, Right: 8, Bottom: 4}},
 		Background: SolidColorBrush{Color: constants.StatRejectedBg},
-		MinSize:    Size{Width: 120, Height: 30},
+		MinSize:    Size{Width: 130, Height: 25},
 		Children: []Widget{
 			HSpacer{},
 			Label{
@@ -96,9 +96,9 @@ func (si *StatsIndicators) createRejectedIndicator() Composite {
 
 func (si *StatsIndicators) createReconnectsIndicator() Composite {
 	return Composite{
-		Layout:     HBox{},
+		Layout:     HBox{Margins: Margins{Left: 8, Top: 4, Right: 8, Bottom: 4}},
 		Background: SolidColorBrush{Color: constants.StatReconnectBg},
-		MinSize:    Size{Width: 140, Height: 30},
+		MinSize:    Size{Width: 160, Height: 25},
 		Children: []Widget{
 			HSpacer{},
 			Label{
@@ -114,9 +114,9 @@ func (si *StatsIndicators) createReconnectsIndicator() Composite {
 
 func (si *StatsIndicators) createUptimeIndicator() Composite {
 	return Composite{
-		Layout:     HBox{},
+		Layout:     HBox{Margins: Margins{Left: 8, Top: 4, Right: 8, Bottom: 4}},
 		Background: SolidColorBrush{Color: constants.StatUptimeBg},
-		MinSize:    Size{Width: 140, Height: 30},
+		MinSize:    Size{Width: 150, Height: 25},
 		Children: []Widget{
 			HSpacer{},
 			Label{

@@ -122,7 +122,7 @@ func (m *EventModel) StartListening(eventChan <-chan *EventItem) {
 
 	// Батчинг оновлення UI
 	go func() {
-		ticker := time.NewTicker(400 * time.Millisecond)
+		ticker := time.NewTicker(900 * time.Millisecond)
 		defer ticker.Stop()
 
 		for range ticker.C {

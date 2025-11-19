@@ -52,13 +52,12 @@ func main() {
 		retranslator.Startup()
 	}()
 
-	// 6. Чекаємо трохи, щоб TCP сервер встиг запуститись
-	time.Sleep(500 * time.Millisecond)
+	// 6. Ініціалізуємо адаптер
 	adapter := adapters.NewAdapter(eventMap)
 
 	// 7. Завантажуємо початковий стан (якщо є збережені дані)
 	go func() {
-		time.Sleep(1 * time.Second) // Чекаємо поки сервер повністю запуститься
+		// 7. Завантажуємо початковий стан
 
 		initialDevices := retranslator.GetInitialDevices()
 		adapter.LoadInitialDevices(initialDevices, ppkChan)

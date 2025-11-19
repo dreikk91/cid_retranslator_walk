@@ -14,17 +14,18 @@ func CreateEventsTab(eventModel *models.EventModel, eventTableView **walk.TableV
 		Layout: VBox{},
 		Children: []Widget{
 			TableView{
-				AssignTo:         eventTableView,
-				AlternatingRowBG: true,
-				ColumnsOrderable: true,
-				Model:            eventModel,
+				AssignTo:            eventTableView,
+				AlternatingRowBG:    true,
+				ColumnsOrderable:    true,
+				LastColumnStretched: true,
+				Model:               eventModel,
 				Columns: []TableViewColumn{
-					{Title: "Час", Width: 120},
-					{Title: "ППК", Width: 50},
-					{Title: "Код", Width: 50},
-					{Title: "Тип", Width: 150},
-					{Title: "Опис", Width: 300},
-					{Title: "Зона|Група", Width: 120},
+					{Title: "Час", Width: 130},
+					{Title: "ППК", Width: 70},
+					{Title: "Код", Width: 60},
+					{Title: "Тип", Width: 120},
+					{Title: "Опис", Width: 250}, // Ця колонка розтягується
+					{Title: "Зона/Група", Width: 100},
 				},
 				StyleCell: func(style *walk.CellStyle) {
 					// Використовуємо безпечний метод getItem (всі зміни в UI thread)

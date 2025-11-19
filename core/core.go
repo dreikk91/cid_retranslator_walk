@@ -38,8 +38,8 @@ type App struct {
 	logBuffer  []string
 	logMu      sync.RWMutex
 	startTime  time.Time
-	statsChan <-chan client.Stats
-	statsMu   sync.RWMutex
+	statsChan  <-chan client.Stats
+	statsMu    sync.RWMutex
 }
 
 // NewApp creates a new App application struct
@@ -99,10 +99,25 @@ func NewApp() *App {
 	}
 	// multiWriter := io.MultiWriter(os.Stdout, fileLogger)
 
+	// Determine log level
+	var logLevel slog.Level
+	switch strings.ToUpper(cfg.Logging.Level) {
+	case "DEBUG":
+		logLevel = slog.LevelDebug
+	case "INFO":
+		logLevel = slog.LevelInfo
+	case "WARN":
+		logLevel = slog.LevelWarn
+	case "ERROR":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelInfo
+	}
+
 	// Create custom handler for collecting full messages
 	handler := &logHandler{
 		app:     app,
-		handler: slog.NewTextHandler(multiWriter, &slog.HandlerOptions{Level: slog.LevelDebug}),
+		handler: slog.NewTextHandler(multiWriter, &slog.HandlerOptions{Level: logLevel}),
 	}
 
 	app.logger = slog.New(handler)
@@ -222,7 +237,6 @@ func (a *App) GetServer() *server.Server {
 func (a *App) GetClient() *client.Client {
 	return a.tcpClient
 }
-
 
 // GetDeviceUpdates повертає канал оновлень пристроїв
 func (a *App) GetDeviceUpdates() <-chan server.Device {

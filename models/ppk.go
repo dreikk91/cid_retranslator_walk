@@ -124,7 +124,7 @@ func (m *PPKModel) StartListening(dataChan <-chan *PPKItem) {
 	// Горутина 2: Періодичне оновлення UI
 	go func() {
 		slog.Info("PPKModel updater goroutine started")
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(1000 * time.Millisecond)
 		defer ticker.Stop()
 
 		for range ticker.C {

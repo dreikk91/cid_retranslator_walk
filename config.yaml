@@ -14,6 +14,7 @@ logging:
     maxbackups: 5
     maxage: 28
     compress: true
+    level: ERROR
 cidrules:
     requiredprefix: "5"
     validlength: 20

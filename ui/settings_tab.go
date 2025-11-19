@@ -32,6 +32,7 @@ type SettingsTab struct {
 	logMaxBackups *walk.NumberEdit
 	logMaxAge     *walk.NumberEdit
 	logCompress   *walk.CheckBox
+	logLevel      *walk.ComboBox
 
 	// CID Rules fields
 	requiredPrefix *walk.LineEdit
@@ -125,6 +126,13 @@ func (st *SettingsTab) CreateSettingsTab() TabPage {
 								Title:  "Логування",
 								Layout: Grid{Columns: 2},
 								Children: []Widget{
+									Label{Text: "Рівень логування:"},
+									ComboBox{
+										AssignTo:     &st.logLevel,
+										Model:        []string{"DEBUG", "INFO", "WARN", "ERROR"},
+										CurrentIndex: 0, // Will be set in resetSettings
+									},
+
 									Label{Text: "Файл логу:"},
 									LineEdit{AssignTo: &st.logFilename, Text: st.cfg.Logging.Filename},
 
@@ -260,6 +268,7 @@ func (st *SettingsTab) saveSettings() {
 	st.cfg.Logging.MaxBackups = int(st.logMaxBackups.Value())
 	st.cfg.Logging.MaxAge = int(st.logMaxAge.Value())
 	st.cfg.Logging.Compress = st.logCompress.Checked()
+	st.cfg.Logging.Level = st.logLevel.Text()
 
 	// Update CID Rules config
 	st.cfg.CIDRules.RequiredPrefix = st.requiredPrefix.Text()
@@ -297,6 +306,25 @@ func (st *SettingsTab) resetSettings() {
 	st.logMaxBackups.SetValue(float64(st.cfg.Logging.MaxBackups))
 	st.logMaxAge.SetValue(float64(st.cfg.Logging.MaxAge))
 	st.logCompress.SetChecked(st.cfg.Logging.Compress)
+
+	// Set log level combo box
+	if st.cfg.Logging.Level == "" {
+		st.cfg.Logging.Level = "INFO"
+	}
+
+	index := -1
+	levels := []string{"DEBUG", "INFO", "WARN", "ERROR"}
+	for i, l := range levels {
+		if l == st.cfg.Logging.Level {
+			index = i
+			break
+		}
+	}
+	if index != -1 {
+		st.logLevel.SetCurrentIndex(index)
+	} else {
+		st.logLevel.SetCurrentIndex(1) // Default to INFO
+	}
 
 	st.requiredPrefix.SetText(st.cfg.CIDRules.RequiredPrefix)
 	st.validLength.SetValue(float64(st.cfg.CIDRules.ValidLength))

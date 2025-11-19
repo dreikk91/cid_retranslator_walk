@@ -33,9 +33,11 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 
 	err := MainWindow{
 		AssignTo: &mw,
-		Title:    "Система моніторингу (модульна)",
-		MinSize:  Size{Width: 600, Height: 400},
-		Layout:   VBox{},
+		Title:    "CID Ретранслятор - Система моніторингу",
+		MinSize:  Size{Width: 800, Height: 600},
+		Size:     Size{Width: 1024, Height: 768},
+		Font:     Font{Family: "Segoe UI", PointSize: 10},
+		Layout:   VBox{Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}},
 
 		Children: []Widget{
 			statsIndicators.CreateIndicators(),

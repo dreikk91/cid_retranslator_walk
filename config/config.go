@@ -43,6 +43,7 @@ type LoggingConfig struct {
 	MaxBackups int    `yaml:"maxbackups"`
 	MaxAge     int    `yaml:"maxage"`
 	Compress   bool   `yaml:"compress"`
+	Level      string `yaml:"level"`
 }
 
 // CIDRules holds the specific rules for CID message processing.
@@ -76,6 +77,7 @@ func defaultConfig() *Config {
 			MaxBackups: 5,
 			MaxAge:     28,
 			Compress:   true,
+			Level:      "INFO",
 		},
 		CIDRules: CIDRules{
 			RequiredPrefix: "5",
