@@ -15,11 +15,10 @@ func TestNew(t *testing.T) {
 		Host: "localhost",
 		Port: "8080",
 	}
-	stats := metrics.New()
-	q := queue.New(10, stats)
+	mockQ := queue.NewMockQueue()
 	rules := &config.CIDRules{}
 
-	s := New(cfg, q, rules)
+	s := New(cfg, mockQ, rules)
 
 	if s.host != cfg.Host {
 		t.Errorf("expected host %s, got %s", cfg.Host, s.host)
@@ -27,7 +26,7 @@ func TestNew(t *testing.T) {
 	if s.port != cfg.Port {
 		t.Errorf("expected port %s, got %s", cfg.Port, s.port)
 	}
-	if s.queue != q {
+	if s.queue != mockQ {
 		t.Error("expected queue to be set")
 	}
 }
@@ -95,14 +94,31 @@ func TestServer_handleRequest(t *testing.T) {
 	defer clientConn.Close()
 	defer serverConn.Close()
 
-	stats := metrics.New()
-	q := queue.New(1, stats)
+	mockQ := queue.NewMockQueue()
+
+	// Channel to signal that Enqueue was called
+	enqueueCalled := make(chan struct{})
+
+	mockQ.EnqueueFunc = func(data queue.SharedData) bool {
+		// ChangeAccountNumber adds the terminator back
+		expectedPayload := "5010 182100R57516331" + "\x14"
+		if string(data.Payload) != expectedPayload {
+			t.Errorf("unexpected payload: %q, want %q", string(data.Payload), expectedPayload)
+		}
+		// Simulate successful processing
+		go func() {
+			data.ReplyCh <- queue.DeliveryData{Status: true}
+		}()
+		close(enqueueCalled)
+		return true
+	}
+
 	rules := &config.CIDRules{
 		RequiredPrefix: "5",
 		ValidLength:    20,
 	}
 
-	s := New(&config.ServerConfig{}, q, rules)
+	s := New(&config.ServerConfig{}, mockQ, rules)
 	s.wg.Add(1) // handleRequest calls Done()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -110,7 +126,7 @@ func TestServer_handleRequest(t *testing.T) {
 
 	connHandler := &connection{
 		conn:   serverConn,
-		queue:  q,
+		queue:  mockQ,
 		rules:  rules,
 		server: s,
 	}
@@ -119,26 +135,17 @@ func TestServer_handleRequest(t *testing.T) {
 
 	// Send valid message
 	// Format: 5 + 1234 + 18 + 2100 + R575 + 16331 + terminator
-	// Account: 2100 -> 2100+2100 = 4200 (if AccNumAdd set)
-	// But here AccNumAdd is 0 by default.
-	// Let's use a simple valid message
 	msg := "5010 182100R57516331" + "\x14"
 	go func() {
 		clientConn.Write([]byte(msg))
 	}()
 
-	// We expect the message to be put in the queue
+	// We expect Enqueue to be called
 	select {
-	case data := <-q.DataChannel:
-		if string(data.Payload) != msg[:20] { // without terminator
-			// Wait, ChangeAccountNumber might change it.
-			// With default rules, it might not change much if AccNumAdd is 0.
-			// But let's check length at least.
-		}
-		// Send reply back to unblock handleRequest
-		data.ReplyCh <- queue.DeliveryData{Status: true}
+	case <-enqueueCalled:
+		// Success
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for message in queue")
+		t.Error("timeout waiting for Enqueue call")
 	}
 
 	// Read ACK

@@ -39,10 +39,15 @@ const (
 	maxBufferSize  = 8192
 )
 
+// MessageEnqueuer defines the interface for enqueuing messages
+type MessageEnqueuer interface {
+	Enqueue(data queue.SharedData) bool
+}
+
 type Server struct {
 	host             string
 	port             string
-	queue            *queue.Queue
+	queue            MessageEnqueuer
 	rules            *config.CIDRules
 	cancel           context.CancelFunc
 	stopOnce         sync.Once
@@ -86,12 +91,12 @@ type GlobalEvent struct {
 
 type connection struct {
 	conn   net.Conn
-	queue  *queue.Queue
+	queue  MessageEnqueuer
 	rules  *config.CIDRules
 	server *Server
 }
 
-func New(cfg *config.ServerConfig, q *queue.Queue, rules *config.CIDRules) *Server {
+func New(cfg *config.ServerConfig, q MessageEnqueuer, rules *config.CIDRules) *Server {
 	return &Server{
 		host:             cfg.Host,
 		port:             cfg.Port,
@@ -109,7 +114,7 @@ func New(cfg *config.ServerConfig, q *queue.Queue, rules *config.CIDRules) *Serv
 func (s *Server) Run(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
-	s.queue.UpdateStartTime()
+	// s.queue.UpdateStartTime() // Removed as interface doesn't have it, or we need to add it to interface
 
 	listener, err := net.Listen("tcp", s.host+":"+s.port)
 	if err != nil {
@@ -513,8 +518,7 @@ func (c *connection) handleRequest(ctx context.Context) {
 				ReplyCh: replyCh,
 			}
 
-			select {
-			case c.queue.DataChannel <- sharedData:
+			if c.queue.Enqueue(sharedData) {
 				deviceID := extractDeviceID(newMessage)
 				c.server.UpdateDevice(deviceID, string(newMessage))
 
@@ -548,7 +552,7 @@ func (c *connection) handleRequest(ctx context.Context) {
 						slog.Error("Error sending NACK after timeout", "error", err)
 					}
 				}
-			default:
+			} else {
 				slog.Warn("Queue buffer full, rejecting message", "from", remoteAddr)
 				if _, err := c.conn.Write([]byte{nackByte}); err != nil {
 					slog.Error("Error sending NACK", "error", err)

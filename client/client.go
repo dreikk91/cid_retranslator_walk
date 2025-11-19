@@ -20,11 +20,17 @@ const (
 	shutdownTimeout = 5 * time.Second
 )
 
+// MessageProvider defines the interface for consuming messages
+type MessageProvider interface {
+	Events() <-chan queue.SharedData
+	GetMetrics() *metrics.Stats
+}
+
 type Client struct {
 	host             string
 	port             string
 	conn             net.Conn
-	queue            *queue.Queue
+	queue            MessageProvider
 	reconnectInitial time.Duration
 	reconnectMax     time.Duration
 	cancel           context.CancelFunc
@@ -32,7 +38,7 @@ type Client struct {
 	metrics          *metrics.Stats
 }
 
-func New(cfg *config.ClientConfig, q *queue.Queue) *Client {
+func New(cfg *config.ClientConfig, q MessageProvider) *Client {
 	return &Client{
 		host:             cfg.Host,
 		port:             cfg.Port,
@@ -170,7 +176,7 @@ func (c *Client) handleConnection(ctx context.Context, conn net.Conn) {
 
 	for {
 		select {
-		case data, ok := <-c.queue.DataChannel:
+		case data, ok := <-c.queue.Events():
 			if !ok {
 				slog.Info("DataChannel closed, stopping connection handler")
 				return
@@ -210,7 +216,7 @@ func (c *Client) processMessage(ctx context.Context, conn net.Conn, data queue.S
 
 	// Обробляємо відповідь
 	status := c.parseReply(reply)
-	
+
 	if status {
 		c.metrics.IncrementAccepted()
 		slog.Debug("Received ACK from server")

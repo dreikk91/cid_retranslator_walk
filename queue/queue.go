@@ -83,3 +83,18 @@ func (q *Queue) GetConnectionStatus() bool {
 func (q *Queue) GetMetrics() *metrics.Stats {
 	return q.metrics
 }
+
+// Enqueue додає дані в чергу (non-blocking). Повертає true, якщо успішно, false якщо черга повна.
+func (q *Queue) Enqueue(data SharedData) bool {
+	select {
+	case q.DataChannel <- data:
+		return true
+	default:
+		return false
+	}
+}
+
+// Events повертає канал для читання подій (receive-only)
+func (q *Queue) Events() <-chan SharedData {
+	return q.DataChannel
+}

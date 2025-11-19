@@ -19,10 +19,10 @@ func TestNew(t *testing.T) {
 		ReconnectInitial: time.Second,
 		ReconnectMax:     time.Minute,
 	}
-	stats := metrics.New()
-	q := queue.New(10, stats)
 
-	c := New(cfg, q)
+	mockQ := queue.NewMockQueue()
+
+	c := New(cfg, mockQ)
 
 	if c.host != cfg.Host {
 		t.Errorf("expected host %s, got %s", cfg.Host, c.host)
@@ -30,10 +30,10 @@ func TestNew(t *testing.T) {
 	if c.port != cfg.Port {
 		t.Errorf("expected port %s, got %s", cfg.Port, c.port)
 	}
-	if c.queue != q {
+	if c.queue != mockQ {
 		t.Error("expected queue to be set")
 	}
-	if c.metrics != stats {
+	if c.metrics != mockQ.Stats {
 		t.Error("expected metrics to be set")
 	}
 }
