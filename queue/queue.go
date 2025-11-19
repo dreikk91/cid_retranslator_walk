@@ -1,89 +1,85 @@
 package queue
 
 import (
+	"cid_retranslator_walk/metrics"
 	"sync"
 	"time"
 )
 
-// Queue encapsulates the channels used for communication between the server and client.
+// Queue інкапсулює канали для комунікації між сервером і клієнтом
 type Queue struct {
 	DataChannel chan SharedData
 	closeOnce   sync.Once
-	accepted int
-	rejected int
-	reconnects int
-	mu sync.RWMutex
-	StartTime   time.Time
-	ConnectionStatus bool
+	metrics     *metrics.Stats
 }
 
-// SharedData is the data structure sent from the server to the client.
+// SharedData - структура даних від сервера до клієнта
 type SharedData struct {
 	Payload []byte
 	ReplyCh chan DeliveryData
 }
 
-// DeliveryData is the data structure for delivery status replies.
+// DeliveryData - структура відповіді про статус доставки
 type DeliveryData struct {
 	Status bool
 }
 
-// New creates and initializes a new Queue.
-func New(bufferSize int) *Queue {
+// New створює та ініціалізує нову чергу
+func New(bufferSize int, stats *metrics.Stats) *Queue {
+	if stats == nil {
+		stats = metrics.New()
+	}
+
 	return &Queue{
 		DataChannel: make(chan SharedData, bufferSize),
+		metrics:     stats,
 	}
 }
 
-// Close closes the channels in the queue.
+// Close закриває канали черги (можна викликати безпечно кілька разів)
 func (q *Queue) Close() {
 	q.closeOnce.Do(func() {
 		close(q.DataChannel)
 	})
 }
 
+// UpdateStartTime оновлює час старту (для обчислення uptime)
 func (q *Queue) UpdateStartTime() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.StartTime = time.Now()
+	q.metrics.Reset()
 }
 
+// IncrementAccepted збільшує лічильник прийнятих повідомлень
 func (q *Queue) IncrementAccepted() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.accepted ++
+	q.metrics.IncrementAccepted()
 }
 
+// IncrementReconnects збільшує лічильник перепідключень
 func (q *Queue) IncrementReconnects() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.reconnects ++
+	q.metrics.IncrementReconnects()
 }
 
+// IncrementRejected збільшує лічильник відхилених повідомлень
 func (q *Queue) IncrementRejected() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.rejected ++
+	q.metrics.IncrementRejected()
 }
 
+// Stats повертає статистику черги
 func (q *Queue) Stats() (accepted, rejected, reconnects int, uptime time.Duration) {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	up := time.Since(q.StartTime).Round(time.Second)
-	return q.accepted, q.rejected, q.reconnects, up
+	snap := q.metrics.Snapshot()
+	return int(snap.Accepted), int(snap.Rejected), int(snap.Reconnects), snap.Uptime
 }
 
+// SetConnectionStatus встановлює статус підключення
 func (q *Queue) SetConnectionStatus(status bool) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.ConnectionStatus = status
+	q.metrics.SetConnected(status)
 }
 
+// GetConnectionStatus повертає статус підключення
 func (q *Queue) GetConnectionStatus() bool {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	return q.ConnectionStatus
-	
+	return q.metrics.IsConnected()
 }
 
-
+// GetMetrics повертає посилання на метрики (для прямого доступу)
+func (q *Queue) GetMetrics() *metrics.Stats {
+	return q.metrics
+}

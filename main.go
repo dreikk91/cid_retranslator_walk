@@ -6,6 +6,7 @@ import (
 	"cid_retranslator_walk/client"
 	"cid_retranslator_walk/config"
 	"cid_retranslator_walk/core"
+	"cid_retranslator_walk/metrics"
 	"cid_retranslator_walk/models"
 	"cid_retranslator_walk/ui"
 	"context"
@@ -31,7 +32,8 @@ func main() {
 	cfg := config.New()
 
 	// 1. Ініціалізація Core (TCP сервер/клієнт)
-	retranslator := core.NewApp()
+	stats := metrics.New()
+	retranslator := core.NewApp(stats)
 
 	// 2. Створюємо моделі UI
 	ppkModel := models.NewPPKModel()
@@ -133,17 +135,11 @@ func startStatsUpdater(
 			select {
 			case stats := <-statsChan:
 				// Оновлюємо модель даних
-				statsData.Update(
-					stats.Accepted,
-					stats.Rejected,
-					stats.Reconnects,
-					stats.Uptime,
-					stats.ConnectionStatus,
-				)
+				statsData.Update(stats)
 
 				// Оновлюємо UI в головному потоці Walk
 				mainWindow.Window.Synchronize(func() {
-					mainWindow.StatsIndicators.Update()
+					mainWindow.UpdateStats(stats)
 				})
 
 			case <-time.After(500 * time.Millisecond):

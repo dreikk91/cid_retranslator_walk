@@ -4,6 +4,7 @@ import (
 	"cid_retranslator_walk/adapters"
 	"cid_retranslator_walk/config"
 	"cid_retranslator_walk/core"
+	"cid_retranslator_walk/metrics"
 	"cid_retranslator_walk/models"
 	"log/slog"
 
@@ -29,7 +30,7 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 	var eventTableView *walk.TableView
 
 	// Створюємо індикатори зі зв'язком з моделлю статистики
-	statsIndicators := NewStatsIndicators(statsData)
+	statsIndicators := NewStatsIndicators()
 
 	err := MainWindow{
 		AssignTo: &mw,
@@ -68,4 +69,8 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 		Window:          mw,
 		StatsIndicators: statsIndicators,
 	}
+}
+
+func (mw *MainWindowWithStats) UpdateStats(snap metrics.Snapshot) {
+	mw.StatsIndicators.Update(snap)
 }

@@ -2,7 +2,7 @@ package ui
 
 import (
 	"cid_retranslator_walk/constants"
-	"cid_retranslator_walk/models"
+	"cid_retranslator_walk/metrics"
 	"fmt"
 
 	"github.com/lxn/walk"
@@ -16,14 +16,11 @@ type StatsIndicators struct {
 	RejectedLabel   *walk.Label
 	ReconnectsLabel *walk.Label
 	UptimeLabel     *walk.Label
-	statsData       *models.StatsData
 }
 
 // NewStatsIndicators створює індикатори з прив'язкою до моделі
-func NewStatsIndicators(statsData *models.StatsData) *StatsIndicators {
-	return &StatsIndicators{
-		statsData: statsData,
-	}
+func NewStatsIndicators() *StatsIndicators {
+	return &StatsIndicators{}
 }
 
 // CreateIndicators створює композит з індикаторами
@@ -131,8 +128,12 @@ func (si *StatsIndicators) createUptimeIndicator() Composite {
 }
 
 // Update оновлює всі індикатори (викликається з UI-потоку через Synchronize)
-func (si *StatsIndicators) Update() {
-	accepted, rejected, reconnects, uptime, status := si.statsData.Get()
+func (si *StatsIndicators) Update(snap metrics.Snapshot) {
+	accepted := snap.Accepted
+	rejected := snap.Rejected
+	reconnects := snap.Reconnects
+	uptime := snap.UptimeString()
+	status := snap.Connected
 
 	// Оновлюємо статус підключення
 	if status {

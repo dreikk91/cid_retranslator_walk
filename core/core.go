@@ -3,6 +3,7 @@ package core
 import (
 	"cid_retranslator_walk/client"
 	"cid_retranslator_walk/config"
+	"cid_retranslator_walk/metrics"
 	"cid_retranslator_walk/queue"
 	"cid_retranslator_walk/server"
 	"context"
@@ -38,15 +39,13 @@ type App struct {
 	logBuffer  []string
 	logMu      sync.RWMutex
 	startTime  time.Time
-	statsChan  <-chan client.Stats
-	statsMu    sync.RWMutex
 }
 
 // NewApp creates a new App application struct
-func NewApp() *App {
+func NewApp(stats *metrics.Stats) *App {
 	cfg := config.New()
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	sharedQueue := queue.New(cfg.Queue.BufferSize)
+	sharedQueue := queue.New(cfg.Queue.BufferSize, stats)
 
 	app := &App{
 		ctx:        ctx,

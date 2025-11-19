@@ -2,6 +2,7 @@ package client
 
 import (
 	"cid_retranslator_walk/config"
+	"cid_retranslator_walk/metrics"
 	"cid_retranslator_walk/queue"
 	"context"
 	"fmt"
@@ -9,6 +10,14 @@ import (
 	"net"
 	"sync"
 	"time"
+)
+
+const (
+	ackByte         = 0x06
+	nackByte        = 0x15
+	replyTimeout    = 10 * time.Second
+	writeTimeout    = 10 * time.Second
+	shutdownTimeout = 5 * time.Second
 )
 
 type Client struct {
@@ -20,21 +29,7 @@ type Client struct {
 	reconnectMax     time.Duration
 	cancel           context.CancelFunc
 	stopOnce         sync.Once
-	startTime        time.Time
-	StatsCh          chan Stats
-}
-
-type Stats struct {
-	Accepted         int    `json:"accepted"`
-	Rejected         int    `json:"rejected"`
-	Uptime           string `json:"uptime"`
-	Reconnects       int    `json:"reconnects"`
-	ConnectionStatus bool   `json:"connectionStatus"`
-}
-
-// Структура статистики вже є (Stats)
-type StatsPublisherConfig struct {
-	Interval time.Duration
+	metrics          *metrics.Stats
 }
 
 func New(cfg *config.ClientConfig, q *queue.Queue) *Client {
@@ -44,92 +39,21 @@ func New(cfg *config.ClientConfig, q *queue.Queue) *Client {
 		queue:            q,
 		reconnectInitial: cfg.ReconnectInitial,
 		reconnectMax:     cfg.ReconnectMax,
-		startTime:        time.Now(),
-		StatsCh:          make(chan Stats, 2),
+		metrics:          q.GetMetrics(),
 	}
 }
 
-func formatDuration(d time.Duration) string {
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	s := int(d.Seconds()) % 60
-	return fmt.Sprintf("%02d:%02d:%02d", h, m, s)
-}
-
-// GetQueueStats повертає статистику з черги
-func (c *Client) GetQueueStats() <-chan Stats {
-	ch := make(chan Stats)
+// GetQueueStats повертає канал зі статистикою
+func (c *Client) GetQueueStats() <-chan metrics.Snapshot {
+	ch := make(chan metrics.Snapshot, 1)
 	go func() {
-		accepted, rejected, reconnects, _ := c.queue.Stats()
-		uptime := time.Since(c.startTime).Truncate(time.Second)
-		status := c.queue.GetConnectionStatus()
-		stats := Stats{
-			Accepted:         accepted,
-			Rejected:         rejected,
-			Reconnects:       reconnects,
-			Uptime:           formatDuration(uptime),
-			ConnectionStatus: status,
-		}
-
-		ch <- stats
+		ch <- c.metrics.Snapshot()
 		close(ch)
 	}()
-
 	return ch
 }
 
-// StartStatsPublisher запускає горутину, яка періодично шле Stats у StatsCh.
-// Працює до скасування ctx.
-func (c *Client) StartStatsPublisher(ctx context.Context, interval time.Duration) {
-	// Ініціалізуємо канал при потребі (ненульовий, буферизований)
-	if c == nil {
-		return
-	}
-	if c.StatsCh == nil {
-		c.StatsCh = make(chan Stats, 2) // невеликий буфер
-	}
-
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				// Закриваємо канал тільки якщо це бажано. Частіше — не закривати, caller закриє.
-				return
-			case <-ticker.C:
-				// Формуємо статистику без блокуючих операцій
-				accepted, rejected, reconnects, _ := c.queue.Stats()
-				uptime := time.Since(c.startTime).Truncate(time.Second)
-				status := c.queue.GetConnectionStatus()
-
-				s := Stats{
-					Accepted:         accepted,
-					Rejected:         rejected,
-					Reconnects:       reconnects,
-					Uptime:           formatDuration(uptime),
-					ConnectionStatus: status,
-				}
-
-				// Невпевнений send? використаємо неблокуючий send з заміною останнього значення:
-				select {
-				case c.StatsCh <- s:
-				default:
-					// якщо канал заповнений, викинути стару і поставити нову (drain+send)
-					select {
-					case <-c.StatsCh:
-					default:
-					}
-					select {
-					case c.StatsCh <- s:
-					default:
-					}
-				}
-			}
-		}
-	}()
-}
-
+// Run запускає клієнта з автоматичним перепідключенням
 func (c *Client) Run(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
@@ -140,120 +64,191 @@ func (c *Client) Run(ctx context.Context) {
 				slog.Error("Panic in client run loop", "panic", r)
 			}
 		}()
+
 		delay := c.reconnectInitial
 		reconnectAttempts := 0
+
 		for {
 			select {
 			case <-ctx.Done():
+				slog.Info("Client stopping due to context cancellation")
 				return
 			default:
 			}
 
-			conn, err := net.Dial("tcp", c.host+":"+c.port)
+			conn, err := c.dial(ctx)
 			if err != nil {
-				c.queue.SetConnectionStatus(false)
+				c.metrics.SetConnected(false)
 				reconnectAttempts++
-				c.queue.IncrementReconnects()
-				logMessage := fmt.Sprintf("Dial failed (attempt %d), retrying in %s", reconnectAttempts, delay)
-				if reconnectAttempts > 10 { // After 10 attempts, log as a warning
-					slog.Warn(logMessage, "target", c.host+":"+c.port, "error", err)
-				} else {
-					slog.Error(logMessage, "target", c.host+":"+c.port, "error", err)
+				c.metrics.IncrementReconnects()
+
+				logLevel := slog.LevelError
+				if reconnectAttempts > 10 {
+					logLevel = slog.LevelWarn
 				}
 
-				time.Sleep(delay)
-				delay *= 2
-				if delay > c.reconnectMax {
-					delay = c.reconnectMax
+				slog.Log(ctx, logLevel, "Dial failed, retrying",
+					"attempt", reconnectAttempts,
+					"delay", delay,
+					"error", err)
+
+				select {
+				case <-time.After(delay):
+					delay = c.calculateNextDelay(delay)
+				case <-ctx.Done():
+					return
 				}
 				continue
 			}
 
-			slog.Info("Connected to target", "target", c.host+":"+c.port)
-			reconnectAttempts = 0 // Reset on successful connection
+			slog.Info("Connected to target", "target", c.target())
+			reconnectAttempts = 0
 			c.conn = conn
-			c.queue.SetConnectionStatus(true)
+			c.metrics.SetConnected(true)
 
-			// handleConnection blocks until connection is lost or shutdown
+			// handleConnection блокується до втрати з'єднання
 			c.handleConnection(ctx, conn)
 
 			conn.Close()
 			c.conn = nil
+			c.metrics.SetConnected(false)
 			delay = c.reconnectInitial
+
 			slog.Info("Connection closed, reconnecting...")
 		}
 	}()
 
-	// Wait for stop signal
 	<-ctx.Done()
-	slog.Info("Client stopping...")
+	slog.Info("Client run loop stopped")
 }
 
+// dial встановлює з'єднання з таймаутом
+func (c *Client) dial(ctx context.Context) (net.Conn, error) {
+	dialer := &net.Dialer{
+		Timeout: 10 * time.Second,
+	}
+	return dialer.DialContext(ctx, "tcp", c.target())
+}
+
+// calculateNextDelay обчислює наступну затримку з exponential backoff
+func (c *Client) calculateNextDelay(current time.Duration) time.Duration {
+	next := current * 2
+	if next > c.reconnectMax {
+		return c.reconnectMax
+	}
+	return next
+}
+
+// target повертає адресу цілі
+func (c *Client) target() string {
+	return net.JoinHostPort(c.host, c.port)
+}
+
+// Stop зупиняє клієнта gracefully
 func (c *Client) Stop() {
 	c.stopOnce.Do(func() {
 		if c.cancel != nil {
 			slog.Info("Stopping client...")
 			c.cancel()
+
 			if c.conn != nil {
 				c.conn.Close()
 			}
-			close(c.StatsCh)
-			slog.Info("Client stopped.")
+
+			slog.Info("Client stopped")
 		}
 	})
 }
 
+// handleConnection обробляє одне з'єднання до його закриття
 func (c *Client) handleConnection(ctx context.Context, conn net.Conn) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("Panic in client connection handler", "panic", r)
+			slog.Error("Panic in handleConnection", "panic", r)
 		}
 	}()
+
 	for {
 		select {
 		case data, ok := <-c.queue.DataChannel:
 			if !ok {
-				slog.Info("DataChannel closed, stopping connection handler.")
+				slog.Info("DataChannel closed, stopping connection handler")
 				return
 			}
 
-			_, err := conn.Write(data.Payload)
-			if err != nil {
-				slog.Error("Write to server failed", "error", err)
-				// Don't close the reply channel, server will timeout
-				return // Exit to reconnect
-			}
-			slog.Debug("Wrote to server", "data", string(data.Payload))
-
-			// Set read deadline for reply
-			if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
-				slog.Error("Failed to set read deadline", "error", err)
+			if err := c.processMessage(ctx, conn, data); err != nil {
+				slog.Error("Failed to process message", "error", err)
 				return
 			}
-
-			reply := make([]byte, 1024)
-			n, err := conn.Read(reply)
-			if err != nil {
-				slog.Error("Read from server failed", "error", err)
-				// Don't close the reply channel, server will timeout
-				return // Exit to reconnect
-			}
-
-			slog.Debug("Reply from server", "reply", string(reply[:n]))
-			if reply[0] == 0x06 {
-				slog.Info("Received ACK")
-				data.ReplyCh <- queue.DeliveryData{Status: true}
-				c.queue.IncrementAccepted()
-			} else {
-				slog.Warn("Received NACK or other non-ACK response")
-				data.ReplyCh <- queue.DeliveryData{Status: false}
-				c.queue.IncrementRejected()
-			}
-			close(data.ReplyCh)
 
 		case <-ctx.Done():
-			slog.Info("Stopping connection handler due to shutdown signal.")
+			slog.Info("Stopping connection handler due to shutdown")
 			return
 		}
 	}
+}
+
+// processMessage обробляє одне повідомлення
+func (c *Client) processMessage(ctx context.Context, conn net.Conn, data queue.SharedData) error {
+	// Встановлюємо дедлайн на запис
+	if err := conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+		return fmt.Errorf("failed to set write deadline: %w", err)
+	}
+
+	// Відправляємо дані
+	if _, err := conn.Write(data.Payload); err != nil {
+		return fmt.Errorf("write failed: %w", err)
+	}
+
+	slog.Debug("Wrote to server", "length", len(data.Payload))
+
+	// Чекаємо відповідь
+	reply, err := c.readReply(conn)
+	if err != nil {
+		return fmt.Errorf("read reply failed: %w", err)
+	}
+
+	// Обробляємо відповідь
+	status := c.parseReply(reply)
+	
+	if status {
+		c.metrics.IncrementAccepted()
+		slog.Debug("Received ACK from server")
+	} else {
+		c.metrics.IncrementRejected()
+		slog.Debug("Received NACK from server")
+	}
+
+	// Відправляємо статус назад
+	select {
+	case data.ReplyCh <- queue.DeliveryData{Status: status}:
+		close(data.ReplyCh)
+	case <-time.After(replyTimeout):
+		slog.Warn("Timeout sending reply to server handler")
+	}
+
+	return nil
+}
+
+// readReply читає відповідь від сервера з таймаутом
+func (c *Client) readReply(conn net.Conn) ([]byte, error) {
+	if err := conn.SetReadDeadline(time.Now().Add(replyTimeout)); err != nil {
+		return nil, fmt.Errorf("failed to set read deadline: %w", err)
+	}
+
+	reply := make([]byte, 1024)
+	n, err := conn.Read(reply)
+	if err != nil {
+		return nil, err
+	}
+
+	return reply[:n], nil
+}
+
+// parseReply визначає статус відповіді (ACK/NACK)
+func (c *Client) parseReply(reply []byte) bool {
+	if len(reply) == 0 {
+		return false
+	}
+	return reply[0] == ackByte
 }
