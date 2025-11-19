@@ -49,11 +49,13 @@ func CreatePPKTab(
 
 					if style.Row()%2 == 0 {
 						style.BackgroundColor = constants.ColorGray
+						style.TextColor = constants.ColorBlack
 					}
 
 					// Перевірка на таймаут
 					if time.Since(item.Date) > cfg.Monitoring.PPKTimeout {
 						style.BackgroundColor = constants.ColorRed
+						style.TextColor = constants.ColorWhite
 					}
 
 					if style.Col() == 2 {

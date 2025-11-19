@@ -16,6 +16,7 @@ type Config struct {
 	Logging    LoggingConfig    `yaml:"logging"`
 	CIDRules   CIDRules         `yaml:"cidrules"`
 	Monitoring MonitoringConfig `yaml:"monitoring"`
+	UI         UIConfig         `yaml:"ui"`
 }
 
 // ServerConfig holds server-specific configuration.
@@ -61,6 +62,13 @@ type MonitoringConfig struct {
 	PPKTimeout time.Duration `yaml:"ppktimeout"`
 }
 
+// UIConfig holds UI-specific configuration.
+type UIConfig struct {
+	StartMinimized bool `yaml:"startminimized"` // Start application minimized to tray
+	MinimizeToTray bool `yaml:"minimizetotray"` // Minimize to tray instead of taskbar
+	CloseToTray    bool `yaml:"closetotray"`    // Close button minimizes to tray instead of exiting
+}
+
 // defaultConfig returns a new Config with default values.
 func defaultConfig() *Config {
 	return &Config{
@@ -94,6 +102,11 @@ func defaultConfig() *Config {
 		},
 		Monitoring: MonitoringConfig{
 			PPKTimeout: 15 * time.Minute,
+		},
+		UI: UIConfig{
+			StartMinimized: false,
+			MinimizeToTray: false,
+			CloseToTray:    false,
 		},
 	}
 }

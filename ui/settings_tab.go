@@ -39,9 +39,14 @@ type SettingsTab struct {
 	validLength    *walk.NumberEdit
 	accNumOffset   *walk.NumberEdit
 	accNumAdd      *walk.NumberEdit
-	
+
 	// Monitoring fields
 	ppkTimeout *walk.LineEdit
+
+	// UI fields
+	startMinimized *walk.CheckBox
+	minimizeToTray *walk.CheckBox
+	closeToTray    *walk.CheckBox
 }
 
 // NewSettingsTab creates a new settings tab with the given configuration
@@ -222,6 +227,32 @@ func (st *SettingsTab) CreateSettingsTab() TabPage {
 								},
 							},
 
+							// UI Configuration
+							GroupBox{
+								Title:  "Налаштування інтерфейсу",
+								Layout: VBox{},
+								Children: []Widget{
+									CheckBox{
+										AssignTo:    &st.startMinimized,
+										Text:        "Запускати згорнутим в трей",
+										Checked:     st.cfg.UI.StartMinimized,
+										ToolTipText: "Програма запускатиметься згорнутою в системний трей",
+									},
+									CheckBox{
+										AssignTo:    &st.minimizeToTray,
+										Text:        "Згортати в трей при мінімізації",
+										Checked:     st.cfg.UI.MinimizeToTray,
+										ToolTipText: "При натисканні кнопки мінімізації вікно ховатиметься в трей",
+									},
+									CheckBox{
+										AssignTo:    &st.closeToTray,
+										Text:        "Згортати в трей при закритті",
+										Checked:     st.cfg.UI.CloseToTray,
+										ToolTipText: "При натисканні кнопки закриття вікно ховатиметься в трей замість виходу з програми",
+									},
+								},
+							},
+
 							// Save and Reset buttons
 							Composite{
 								Layout: HBox{},
@@ -303,6 +334,11 @@ func (st *SettingsTab) saveSettings() {
 		return
 	}
 
+	// Update UI config
+	st.cfg.UI.StartMinimized = st.startMinimized.Checked()
+	st.cfg.UI.MinimizeToTray = st.minimizeToTray.Checked()
+	st.cfg.UI.CloseToTray = st.closeToTray.Checked()
+
 	// Save to file
 	if err := st.cfg.Save("config.yaml"); err != nil {
 		walk.MsgBox(nil, "Помилка",
@@ -359,6 +395,10 @@ func (st *SettingsTab) resetSettings() {
 	st.accNumAdd.SetValue(float64(st.cfg.CIDRules.AccNumAdd))
 
 	st.ppkTimeout.SetText(st.cfg.Monitoring.PPKTimeout.String())
+
+	st.startMinimized.SetChecked(st.cfg.UI.StartMinimized)
+	st.minimizeToTray.SetChecked(st.cfg.UI.MinimizeToTray)
+	st.closeToTray.SetChecked(st.cfg.UI.CloseToTray)
 }
 
 // CreateSettingsTab is a helper function for backward compatibility

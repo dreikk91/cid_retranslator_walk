@@ -14,7 +14,7 @@ logging:
     maxbackups: 5
     maxage: 28
     compress: true
-    level: ERROR
+    level: WARN
 cidrules:
     requiredprefix: "5"
     validlength: 20
@@ -24,3 +24,7 @@ cidrules:
     accnumadd: 2100
 monitoring:
     ppktimeout: 15m0s
+ui:
+    startminimized: false
+    minimizetotray: false
+    closetotray: false
