@@ -153,6 +153,7 @@ func (m *PPKModel) StartListening(dataChan <-chan *PPKItem) {
 
 				for _, item := range itemsToProcess {
 					found := false
+					// 1. Шукаємо в існуючих елементах
 					for i, existing := range m.items {
 						if existing.Number == item.Number {
 							m.items[i] = item
@@ -161,6 +162,19 @@ func (m *PPKModel) StartListening(dataChan <-chan *PPKItem) {
 							break
 						}
 					}
+
+					// 2. Якщо не знайшли, шукаємо в доданих у цій пачці
+					if !found {
+						for i, added := range addedRows {
+							if added.Number == item.Number {
+								addedRows[i] = item
+								found = true
+								break
+							}
+						}
+					}
+
+					// 3. Якщо ніде не знайшли - додаємо як новий
 					if !found {
 						addedRows = append(addedRows, item)
 					}
