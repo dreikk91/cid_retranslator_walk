@@ -7,10 +7,10 @@ client:
     reconnectinitial: 1s
     reconnectmax: 1m0s
 queue:
-    buffersize: 100
+    buffersize: 94
 logging:
     filename: app.log
-    maxsize: 10
+    maxsize: 8
     maxbackups: 5
     maxage: 28
     compress: true

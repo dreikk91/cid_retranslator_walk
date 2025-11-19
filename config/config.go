@@ -10,11 +10,11 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	Server   ServerConfig `yaml:"server"`
-	Client   ClientConfig `yaml:"client"`
-	Queue    QueueConfig  `yaml:"queue"`
+	Server   ServerConfig  `yaml:"server"`
+	Client   ClientConfig  `yaml:"client"`
+	Queue    QueueConfig   `yaml:"queue"`
 	Logging  LoggingConfig `yaml:"logging"`
-	CIDRules CIDRules     `yaml:"cidrules"`
+	CIDRules CIDRules      `yaml:"cidrules"`
 }
 
 // ServerConfig holds server-specific configuration.
@@ -133,4 +133,21 @@ func load(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// Save writes the current configuration to the file at the given path.
+func (c *Config) Save(path string) error {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		slog.Error("Failed to marshal configuration", "error", err)
+		return err
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		slog.Error("Failed to write configuration file", "path", path, "error", err)
+		return err
+	}
+
+	slog.Info("Configuration saved successfully", "path", path)
+	return nil
 }

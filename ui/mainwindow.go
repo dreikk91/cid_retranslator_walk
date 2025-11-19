@@ -2,6 +2,7 @@ package ui
 
 import (
 	"cid_retranslator_walk/adapters"
+	"cid_retranslator_walk/config"
 	"cid_retranslator_walk/core"
 	"cid_retranslator_walk/models"
 	"log/slog"
@@ -21,7 +22,7 @@ type MainWindowWithStats struct {
 	StatsIndicators *StatsIndicators
 }
 
-func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, appCtx *AppContext, statsData *models.StatsData,) *MainWindowWithStats{
+func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, appCtx *AppContext, statsData *models.StatsData, cfg *config.Config) *MainWindowWithStats {
 	var mw *walk.MainWindow
 	var tabWidget *walk.TabWidget
 	var ppkTableView *walk.TableView
@@ -35,7 +36,7 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 		Title:    "Система моніторингу (модульна)",
 		MinSize:  Size{Width: 600, Height: 400},
 		Layout:   VBox{},
-		
+
 		Children: []Widget{
 			statsIndicators.CreateIndicators(),
 			TabWidget{
@@ -43,7 +44,7 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 				Pages: []TabPage{
 					CreatePPKTab(ppkModel, &ppkTableView, &mw, appCtx),
 					CreateEventsTab(eventModel, &eventTableView),
-					CreateSettingsTab(),
+					CreateSettingsTab(cfg),
 				},
 			},
 		},

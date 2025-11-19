@@ -4,6 +4,7 @@ import (
 	"cid_retranslator_walk/adapters"
 	"cid_retranslator_walk/cidparser"
 	"cid_retranslator_walk/client"
+	"cid_retranslator_walk/config"
 	"cid_retranslator_walk/core"
 	"cid_retranslator_walk/models"
 	"cid_retranslator_walk/ui"
@@ -25,6 +26,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// 0. Завантажуємо конфігурацію
+	cfg := config.New()
 
 	// 1. Ініціалізація Core (TCP сервер/клієнт)
 	retranslator := core.NewApp()
@@ -86,7 +90,7 @@ func main() {
 
 	// 10. Створюємо і запускаємо UI (блокуюча операція)
 	slog.Info("Creating main window...")
-	mw := ui.CreateMainWindow(ppkModel, eventModel, appContext, statsData) // Передаємо контекст
+	mw := ui.CreateMainWindow(ppkModel, eventModel, appContext, statsData, cfg) // Передаємо контекст та конфіг
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -97,7 +101,6 @@ func main() {
 	slog.Info("Starting UI...")
 	mw.Window.Run()
 
-	
 	// 12. Graceful shutdown після закриття UI
 	slog.Info("UI closed, initiating shutdown...")
 	retranslator.Shutdown(retranslator.Ctx())
@@ -108,7 +111,6 @@ func main() {
 
 	slog.Info("Application shutdown complete")
 }
-
 
 func startStatsUpdater(
 	ctx context.Context,
@@ -128,7 +130,7 @@ func startStatsUpdater(
 		case <-ticker.C:
 			// Отримуємо статистику з клієнта (неблокуюча операція через канал)
 			statsChan := tcpClient.GetQueueStats()
-			
+
 			select {
 			case stats := <-statsChan:
 				// Оновлюємо модель даних
