@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
+
 	//"sort"
 	"strconv"
 	"sync"
@@ -40,6 +41,7 @@ type Server struct {
 	eventUpdates     chan GlobalEvent
 	deviceEventChans map[int]chan Event
 	closeOnce        sync.Once
+	wg               sync.WaitGroup
 }
 
 // Event represents an event for a device
@@ -106,7 +108,12 @@ func (server *Server) Run(ctx context.Context) {
 	slog.Info("Server started", "host", server.host, "port", server.port)
 
 	go func() {
-		defer server.listener.Close()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Panic in server listener", "panic", r)
+			}
+			server.listener.Close()
+		}()
 		for {
 			conn, err := server.listener.Accept()
 			if err != nil {
@@ -120,13 +127,20 @@ func (server *Server) Run(ctx context.Context) {
 				continue
 			}
 			slog.Info("Accepted connection", "from", conn.RemoteAddr())
+			server.wg.Add(1)
 			connHandler := &connection{conn: conn, queue: server.queue, rules: server.rules, server: server}
 			go connHandler.handleRequest(ctx)
 		}
 	}()
 
 	// Горутина для очищення неактивних пристроїв
+	// Горутина для очищення неактивних пристроїв
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Panic in cleanup goroutine", "panic", r)
+			}
+		}()
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for {
@@ -154,6 +168,20 @@ func (server *Server) Stop() {
 			server.cancel()
 			if server.listener != nil {
 				server.listener.Close()
+			}
+
+			// Wait for active connections to finish with a timeout
+			done := make(chan struct{})
+			go func() {
+				server.wg.Wait()
+				close(done)
+			}()
+
+			select {
+			case <-done:
+				slog.Info("All connections closed gracefully")
+			case <-time.After(5 * time.Second):
+				slog.Warn("Server stop timed out, some connections might be forced closed")
 			}
 		}
 	})
@@ -355,6 +383,7 @@ func (server *Server) CloseDeviceEventChannel(deviceID int) {
 }
 
 func (c *connection) handleRequest(ctx context.Context) {
+	defer c.server.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("Panic in handler", "panic", r, "from", c.conn.RemoteAddr())
@@ -498,7 +527,12 @@ func extractDeviceID(message []byte) int {
 		slog.Error("Message too short to extract device ID", "length", len(message))
 		return 0
 	}
-	accountNumber, err := strconv.Atoi(string(message[7:11]))
+	// Ensure we don't panic if message is exactly 11 bytes but somehow malformed or shorter than expected for slicing
+	if len(message) < 11 {
+		return 0
+	}
+	accountNumberStr := string(message[7:11])
+	accountNumber, err := strconv.Atoi(accountNumberStr)
 	if err != nil {
 		slog.Error("Failed to extract device ID", "error", err)
 		return 0

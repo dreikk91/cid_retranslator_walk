@@ -203,10 +203,20 @@ func (a *App) Startup() {
 	a.wg.Add(2)
 	go func() {
 		defer a.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				a.logger.Error("Panic in TCP server", "panic", r)
+			}
+		}()
 		a.tcpServer.Run(a.ctx)
 	}()
 	go func() {
 		defer a.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				a.logger.Error("Panic in TCP client", "panic", r)
+			}
+		}()
 		a.tcpClient.Run(a.ctx)
 	}()
 

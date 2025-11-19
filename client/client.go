@@ -34,7 +34,7 @@ type Stats struct {
 
 // Структура статистики вже є (Stats)
 type StatsPublisherConfig struct {
-    Interval time.Duration
+	Interval time.Duration
 }
 
 func New(cfg *config.ClientConfig, q *queue.Queue) *Client {
@@ -46,7 +46,6 @@ func New(cfg *config.ClientConfig, q *queue.Queue) *Client {
 		reconnectMax:     cfg.ReconnectMax,
 		startTime:        time.Now(),
 		StatsCh:          make(chan Stats, 2),
-
 	}
 }
 
@@ -82,53 +81,53 @@ func (c *Client) GetQueueStats() <-chan Stats {
 // StartStatsPublisher запускає горутину, яка періодично шле Stats у StatsCh.
 // Працює до скасування ctx.
 func (c *Client) StartStatsPublisher(ctx context.Context, interval time.Duration) {
-    // Ініціалізуємо канал при потребі (ненульовий, буферизований)
-    if c == nil {
-        return
-    }
-    if c.StatsCh == nil {
-        c.StatsCh = make(chan Stats, 2) // невеликий буфер
-    }
+	// Ініціалізуємо канал при потребі (ненульовий, буферизований)
+	if c == nil {
+		return
+	}
+	if c.StatsCh == nil {
+		c.StatsCh = make(chan Stats, 2) // невеликий буфер
+	}
 
-    go func() {
-        ticker := time.NewTicker(interval)
-        defer ticker.Stop()
-        for {
-            select {
-            case <-ctx.Done():
-                // Закриваємо канал тільки якщо це бажано. Частіше — не закривати, caller закриє.
-                return
-            case <-ticker.C:
-                // Формуємо статистику без блокуючих операцій
-                accepted, rejected, reconnects, _ := c.queue.Stats()
-                uptime := time.Since(c.startTime).Truncate(time.Second)
-                status := c.queue.GetConnectionStatus()
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				// Закриваємо канал тільки якщо це бажано. Частіше — не закривати, caller закриє.
+				return
+			case <-ticker.C:
+				// Формуємо статистику без блокуючих операцій
+				accepted, rejected, reconnects, _ := c.queue.Stats()
+				uptime := time.Since(c.startTime).Truncate(time.Second)
+				status := c.queue.GetConnectionStatus()
 
-                s := Stats{
-                    Accepted:         accepted,
-                    Rejected:         rejected,
-                    Reconnects:       reconnects,
-                    Uptime:           formatDuration(uptime),
-                    ConnectionStatus: status,
-                }
+				s := Stats{
+					Accepted:         accepted,
+					Rejected:         rejected,
+					Reconnects:       reconnects,
+					Uptime:           formatDuration(uptime),
+					ConnectionStatus: status,
+				}
 
-                // Невпевнений send? використаємо неблокуючий send з заміною останнього значення:
-                select {
-                case c.StatsCh <- s:
-                default:
-                    // якщо канал заповнений, викинути стару і поставити нову (drain+send)
-                    select {
-                    case <-c.StatsCh:
-                    default:
-                    }
-                    select {
-                    case c.StatsCh <- s:
-                    default:
-                    }
-                }
-            }
-        }
-    }()
+				// Невпевнений send? використаємо неблокуючий send з заміною останнього значення:
+				select {
+				case c.StatsCh <- s:
+				default:
+					// якщо канал заповнений, викинути стару і поставити нову (drain+send)
+					select {
+					case <-c.StatsCh:
+					default:
+					}
+					select {
+					case c.StatsCh <- s:
+					default:
+					}
+				}
+			}
+		}
+	}()
 }
 
 func (c *Client) Run(ctx context.Context) {
@@ -136,6 +135,11 @@ func (c *Client) Run(ctx context.Context) {
 	c.cancel = cancel
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Panic in client run loop", "panic", r)
+			}
+		}()
 		delay := c.reconnectInitial
 		reconnectAttempts := 0
 		for {
@@ -200,6 +204,11 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) handleConnection(ctx context.Context, conn net.Conn) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Panic in client connection handler", "panic", r)
+		}
+	}()
 	for {
 		select {
 		case data, ok := <-c.queue.DataChannel:
@@ -215,6 +224,12 @@ func (c *Client) handleConnection(ctx context.Context, conn net.Conn) {
 				return // Exit to reconnect
 			}
 			slog.Debug("Wrote to server", "data", string(data.Payload))
+
+			// Set read deadline for reply
+			if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				slog.Error("Failed to set read deadline", "error", err)
+				return
+			}
 
 			reply := make([]byte, 1024)
 			n, err := conn.Read(reply)
