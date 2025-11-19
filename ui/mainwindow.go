@@ -64,12 +64,22 @@ func CreateMainWindow(ppkModel *models.PPKModel, eventModel *models.EventModel, 
 	// Створюємо іконку в системному треї
 	icon, err := walk.Resources.Icon("APPICON")
 	if err != nil {
-		// Якщо іконка не знайдена, використовуємо стандартну іконку Windows
-		icon, err = walk.NewIconFromResourceId(32512) // IDI_APPLICATION
+		// Спроба 2: завантажити з файлу icon.ico
+		icon, err = walk.NewIconFromFile("icon.ico")
 		if err != nil {
-			slog.Warn("Failed to load any icon", "error", err)
-			icon = nil
+			// Спроба 3: використовуємо стандартну іконку Windows
+			icon, err = walk.NewIconFromResourceId(32512) // IDI_APPLICATION
+			if err != nil {
+				slog.Warn("Failed to load icon from all sources", "error", err)
+				icon = nil
+			} else {
+				slog.Info("Using default Windows icon")
+			}
+		} else {
+			slog.Info("Icon loaded from file icon.ico")
 		}
+	} else {
+		slog.Info("Icon loaded from embedded resources")
 	}
 
 	notifyIcon, err = walk.NewNotifyIcon(mw)
